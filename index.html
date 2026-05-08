@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HB Trading Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    :root {
+      --gold: #c9a84c;
+      --gold-light: #e8c97a;
+      --gold-dim: rgba(201,168,76,0.15);
+      --bg: #0d0d0f;
+      --bg2: #13131a;
+      --bg3: #1a1a24;
+      --text: #f0ead8;
+      --text-dim: #a09880;
+      --border: rgba(201,168,76,0.2);
+      --green: #4caf7a;
+      --green-dim: rgba(76,175,122,0.15);
+      --red: #cf6679;
+      --red-dim: rgba(207,102,121,0.15);
+      --blue: #6b8fce;
+      --sidebar-w: 220px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', 'Inter', sans-serif; min-height: 100vh; }
+    a { color: inherit; text-decoration: none; }
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    /* ── Overlay screens ── */
+    .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); z-index: 1000; }
+    .screen.hidden { display: none; }
+    .screen-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 40px; max-width: 420px; width: 90%; text-align: center; }
+    .screen-card h2 { font-size: 1.4rem; font-weight: 500; margin-bottom: 8px; color: var(--gold-light); }
+    .screen-card p { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 28px; line-height: 1.7; }
+    .screen-card .form-group { text-align: left; margin-bottom: 14px; }
+    .screen-card .form-group label { font-size: 0.72rem; color: var(--text-dim); display: block; margin-bottom: 5px; letter-spacing: 0.03em; }
+    .screen-card .form-group input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 14px; font-family: inherit; font-size: 0.88rem; transition: border-color 0.15s; }
+    .screen-card .form-group input:focus { outline: none; border-color: var(--gold); }
+    .screen-card .auth-err { background: var(--red-dim); border: 1px solid rgba(207,102,121,0.35); color: var(--red); border-radius: 7px; padding: 9px 14px; font-size: 0.80rem; margin-bottom: 14px; display: none; text-align: left; }
+
+    /* ── Layout ── */
+    #app { display: flex; min-height: 100vh; }
+    .sidebar { width: var(--sidebar-w); background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; height: 100vh; overflow-y: auto; z-index: 100; }
+    .sidebar-brand { padding: 24px 20px 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-brand .brand-sub { font-size: 0.62rem; color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; }
+    .sidebar-brand .brand-name { font-size: 0.95rem; font-weight: 500; color: var(--gold-light); }
+    .sidebar-nav { padding: 12px 0; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 20px; cursor: pointer; font-size: 0.86rem; color: var(--text-dim); transition: all 0.15s; border-left: 2px solid transparent; }
+    .nav-item:hover { color: var(--text); background: var(--gold-dim); }
+    .nav-item.active { color: var(--gold-light); border-left-color: var(--gold); background: var(--gold-dim); }
+    .nav-item .ni { font-size: 1rem; width: 20px; text-align: center; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .user-name { font-size: 0.78rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 155px; }
+    .logout-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.72rem; margin-top: 2px; display: block; }
+    .logout-btn:hover { color: var(--red); }
+    .content { margin-left: var(--sidebar-w); flex: 1; padding: 32px; min-height: 100vh; }
+
+    /* ── Views ── */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Page header ── */
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+    .page-title { font-size: 1.4rem; font-weight: 500; }
+    .page-title span { color: var(--gold); font-size: 0.9rem; font-weight: 300; margin-left: 8px; }
+
+    /* ── Stat cards ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+    .stat-label { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .stat-value { font-size: 1.5rem; font-weight: 600; }
+    .stat-sub { font-size: 0.75rem; color: var(--text-dim); margin-top: 3px; }
+    .stat-card.c-green { border-color: rgba(76,175,122,0.35); }
+    .stat-card.c-green .stat-value { color: var(--green); }
+    .stat-card.c-red { border-color: rgba(207,102,121,0.35); }
+    .stat-card.c-red .stat-value { color: var(--red); }
+    .stat-card.c-gold { border-color: rgba(201,168,76,0.35); }
+    .stat-card.c-gold .stat-value { color: var(--gold-light); }
+
+    /* ── Chart cards ── */
+    .chart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 24px; }
+    .chart-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .chart-card h3 { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 14px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.05em; }
+    .chart-card canvas { max-height: 240px; }
+    .chart-card-full { grid-column: 1 / -1; }
+
+    /* ── Tables ── */
+    .table-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 22px; }
+    .table-card-hdr { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .table-card-hdr h3 { font-size: 0.88rem; font-weight: 500; }
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.80rem; }
+    th { text-align: left; padding: 9px 14px; color: var(--text-dim); font-weight: 400; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    td { padding: 9px 14px; border-bottom: 1px solid rgba(201,168,76,0.07); white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(201,168,76,0.04); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.70rem; font-weight: 500; }
+    .badge.win { background: var(--green-dim); color: var(--green); }
+    .badge.loss { background: var(--red-dim); color: var(--red); }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+
+    /* ── Forms ── */
+    .form-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 22px; }
+    .form-card h3 { font-size: 0.9rem; font-weight: 500; margin-bottom: 18px; color: var(--gold-light); }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-size: 0.72rem; color: var(--text-dim); letter-spacing: 0.03em; }
+    .form-group input, .form-group select, .form-group textarea { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; color: var(--text); padding: 8px 11px; font-family: inherit; font-size: 0.83rem; transition: border-color 0.15s; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--gold); }
+    .form-group select option { background: var(--bg2); }
+    .form-group textarea { resize: vertical; min-height: 76px; }
+    .form-row { grid-column: 1 / -1; }
+    .form-group input[readonly] { background: rgba(201,168,76,0.06); color: var(--text-dim); cursor: default; }
+
+    /* ── Exchange balance grid ── */
+    .exch-section-title { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin: 16px 0 8px; }
+    .exch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; margin-bottom: 6px; }
+    .exch-row { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 10px 14px; display: grid; grid-template-columns: 80px 1fr 1fr; gap: 8px; align-items: center; }
+    .exch-name { font-size: 0.78rem; font-weight: 500; color: var(--text-dim); }
+    .exch-row input { background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 5px 9px; font-size: 0.80rem; width: 100%; }
+    .exch-row input:focus { outline: none; border-color: var(--gold); }
+
+    /* ── Buttons ── */
+    .btn { padding: 8px 18px; border-radius: 7px; border: none; cursor: pointer; font-family: inherit; font-size: 0.83rem; font-weight: 500; transition: all 0.15s; }
+    .btn-primary { background: var(--gold); color: #0d0d0f; }
+    .btn-primary:hover { background: var(--gold-light); }
+    .btn-secondary { background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border); }
+    .btn-secondary:hover { color: var(--text); border-color: var(--gold); }
+    .btn-sm { padding: 4px 11px; font-size: 0.75rem; }
+    .btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid rgba(207,102,121,0.3); }
+    .btn-danger:hover { background: rgba(207,102,121,0.25); }
+
+    /* ── TradingView ── */
+    .tv-wrap { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 10px; }
+    .tv-controls { padding: 10px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .tv-controls input, .tv-controls select { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 10px; font-family: inherit; font-size: 0.80rem; }
+    .tv-controls input { width: 160px; }
+    #tv-widget-container { height: 420px; }
+
+    /* ── Image upload ── */
+    .img-drop { border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.15s; color: var(--text-dim); font-size: 0.83rem; }
+    .img-drop:hover, .img-drop.drag { border-color: var(--gold); color: var(--text); }
+    .img-drop input { display: none; }
+    .img-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; margin-top: 10px; }
+    .img-thumb { position: relative; border-radius: 5px; overflow: hidden; aspect-ratio: 16/10; cursor: pointer; }
+    .img-thumb img { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.15s; }
+    .img-thumb:hover img { opacity: 0.85; }
+    .img-thumb-del { position: absolute; top: 3px; right: 3px; background: rgba(207,102,121,0.85); color: white; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; }
+
+    /* ── Filter bar ── */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .filter-bar input, .filter-bar select { background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); padding: 7px 11px; font-family: inherit; font-size: 0.80rem; }
+    .filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--gold); }
+
+    /* ── Seasonality ── */
+    .season-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+    /* ── Section divider ── */
+    .section-label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+    /* ── Modal ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 26px; width: 100%; max-width: 760px; margin: auto; }
+    .modal-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-hdr h3 { font-size: 1rem; font-weight: 500; }
+    .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.3rem; line-height: 1; }
+    .modal-close:hover { color: var(--text); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+    /* ── Lightbox ── */
+    #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 900; display: none; align-items: center; justify-content: center; cursor: zoom-out; }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,0.6); }
+    #lightbox-close { position: absolute; top: 20px; right: 24px; background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; opacity: 0.7; }
+    #lightbox-close:hover { opacity: 1; }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 11px 18px; border-radius: 8px; font-size: 0.83rem; opacity: 0; transform: translateY(8px); transition: all 0.22s; z-index: 9999; pointer-events: none; }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.ok { border-color: var(--green); color: var(--green); }
+    #toast.err { border-color: var(--red); color: var(--red); }
+
+    /* ── Loading placeholder ── */
+    .empty { color: var(--text-dim); font-size: 0.83rem; padding: 36px; text-align: center; }
+
+    @media (max-width: 900px) {
+      :root { --sidebar-w: 0px; }
+      .sidebar { display: none; }
+      .content { margin-left: 0; padding: 16px; }
+      .chart-row { grid-template-columns: 1fr; }
+      .season-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Auth screen ─── -->
+<div id="auth-screen" class="screen">
+  <div class="screen-card">
+    <h2>HB Trading Dashboard</h2>
+    <p>Hilliard Buffshire 전용<br>매매일지 &amp; 시즈널리티 분석 플랫폼</p>
+    <div class="auth-err" id="auth-err"></div>
+    <div class="form-group">
+      <label>아이디</label>
+      <input type="text" id="auth-id" placeholder="아이디 입력" autocomplete="username">
+    </div>
+    <div class="form-group" style="margin-bottom:22px">
+      <label>비밀번호</label>
+      <input type="password" id="auth-pw" placeholder="비밀번호 입력" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" style="width:100%" id="login-btn" onclick="doLogin()">로그인</button>
+  </div>
+</div>
+
+<!-- ─── Main app ─── -->
+<div id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-sub">Hilliard Buffshire</div>
+      <div class="brand-name">Trading Dashboard</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-view="dashboard"><span class="ni">🏠</span> 대시보드</div>
+      <div class="nav-item" data-view="journal"><span class="ni">📋</span> 매매일지</div>
+      <div class="nav-item" data-view="trades"><span class="ni">📊</span> 매매기록</div>
+      <div class="nav-item" data-view="seasonality"><span class="ni">📈</span> 시즈널리티</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div>
+          <div class="user-name" id="user-name">—</div>
+          <button class="logout-btn" id="logout-btn">로그아웃</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <!-- ─── Dashboard ─── -->
+    <section id="view-dashboard" class="view active">
+      <div class="page-header">
+        <div class="page-title">대시보드<span>Overview</span></div>
+      </div>
+      <div class="stat-grid" id="dash-stats">
+        <div class="stat-card"><div class="stat-label">로딩 중...</div><div class="stat-value">—</div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card">
+          <h3>누적 수익률 추이</h3>
+          <canvas id="chart-cumulative"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>승률</h3>
+          <canvas id="chart-winrate"></canvas>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-card-hdr">
+          <h3>최근 매매기록</h3>
+          <button class="btn btn-secondary btn-sm" onclick="goTo('trades')">전체보기</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>날짜</th><th>종목</th><th>손익%</th><th>승/패</th><th>누적수익</th></tr></thead>
+            <tbody id="dash-recent"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Journal ─── -->
+    <section id="view-journal" class="view">
+      <div class="page-header">
+        <div class="page-title">매매일지<span>Daily Journal</span></div>
+        <button class="btn btn-primary" onclick="openJournalModal()">+ 새 기록</button>
+      </div>
+      <div class="filter-bar">
+        <input type="month" id="jnl-filter-month" onchange="renderJournal()">
+      </div>
+      <div class="table-card">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>업비트</th><th>빗썸</th><th>Core</th><th>MEXC</th>
+                <th>방엑스</th><th>코인베이스</th><th>로빈후드</th>
+                <th>총 시드</th><th>수익금</th><th>수익률</th><th>출금</th><th>메모</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="journal-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Trades ─── -->
+    <section id="view-trades" class="view">
+      <div class="page-header">
+        <div class="page-title">매매기록<span>Trade Records</span></div>
+        <button class="btn btn-primary" onclick="openTradeModal()">+ 새 매매</button>
+      </div>
+      <div class="chart-card" style="margin-bottom:22px">
+        <h3>누적 수익률 곡선</h3>
+        <canvas id="chart-trades-curve"></canvas>
+      </div>
+      <div class="filter-bar">
+        <input type="text" placeholder="종목 검색..." id="tr-search" oninput="renderTrades()">
+        <select id="tr-filter-result" onchange="renderTrades()">
+          <option value="">전체</option><option>승</option><option>패</option>
+        </select>
+        <select id="tr-filter-day" onchange="renderTrades()">
+          <option value="">진입 요일 전체</option>
+          <option>월요일</option><option>화요일</option><option>수요일</option>
+          <option>목요일</option><option>금요일</option><option>토요일</option><option>일요일</option>
+        </select>
+      </div>
+      <div class="table-card">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>날짜</th><th>종목</th><th>진입가</th><th>청산가</th><th>손익%</th>
+                <th>보유기간</th><th>결과</th><th>누적수익</th>
+                <th>진입요일</th><th>청산요일</th><th>메모</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="trades-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Seasonality ─── -->
+    <section id="view-seasonality" class="view">
+      <div class="page-header">
+        <div class="page-title">시즈널리티<span>Seasonality Analysis</span></div>
+      </div>
+      <div class="stat-grid" id="season-stats"></div>
+      <div class="season-grid" style="margin-top:22px">
+        <div class="chart-card">
+          <h3>진입 요일별 승률 (%)</h3>
+          <canvas id="chart-entry-wr"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>진입 요일별 평균 손익 (%)</h3>
+          <canvas id="chart-entry-pnl"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>청산 요일별 승률 (%)</h3>
+          <canvas id="chart-exit-wr"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>요일별 매매 빈도</h3>
+          <canvas id="chart-freq"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ─── Journal Modal ─── -->
+<div class="modal-overlay" id="modal-journal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>📋 매매일지 기록</h3>
+      <button class="modal-close" onclick="closeModal('modal-journal')">✕</button>
+    </div>
+    <div class="form-grid" style="margin-bottom:14px">
+      <div class="form-group">
+        <label>날짜</label>
+        <input type="date" id="jnl-date">
+      </div>
+      <div class="form-group">
+        <label>출금내역</label>
+        <input type="text" id="jnl-withdrawal" placeholder="예: 로빈후드 $5,000 출금">
+      </div>
+    </div>
+
+    <div class="exch-section-title">KRW 계좌</div>
+    <div class="exch-grid" id="exch-krw"></div>
+    <div class="exch-section-title">USD 계좌</div>
+    <div class="exch-grid" id="exch-usd"></div>
+
+    <div class="form-grid" style="margin:14px 0">
+      <div class="form-group">
+        <label>USD 총 시드 (자동)</label>
+        <input type="text" id="jnl-total" readonly>
+      </div>
+      <div class="form-group">
+        <label>USD 수익금 (자동)</label>
+        <input type="text" id="jnl-profit" readonly>
+      </div>
+      <div class="form-group">
+        <label>수익률 (자동)</label>
+        <input type="text" id="jnl-rate" readonly>
+      </div>
+    </div>
+
+    <div class="section-label">TradingView 차트</div>
+    <div class="tv-wrap">
+      <div class="tv-controls">
+        <input type="text" id="tv-symbol" value="BINANCE:BTCUSDT" placeholder="심볼 (예: BINANCE:BTCUSDT)">
+        <select id="tv-interval">
+          <option value="D">1일</option><option value="240">4시간</option>
+          <option value="60">1시간</option><option value="W">주봉</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadTV()">차트 불러오기</button>
+      </div>
+      <div id="tv-widget-container"></div>
+    </div>
+
+    <div class="section-label" style="margin-top:16px">차트 스크린샷 업로드</div>
+    <div class="img-drop" id="jnl-drop" onclick="document.getElementById('jnl-img-input').click()">
+      <input type="file" id="jnl-img-input" multiple accept="image/*" onchange="addImages(event,'jnl')">
+      📎 클릭 또는 드래그로 이미지 첨부 (최대 4장)
+    </div>
+    <div class="img-previews" id="jnl-previews"></div>
+
+    <div class="section-label" style="margin-top:16px">메모</div>
+    <div class="form-group">
+      <textarea id="jnl-memo" rows="3" placeholder="오늘 장 복기, 특이사항..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-journal')">취소</button>
+      <button class="btn btn-primary" id="jnl-save-btn" onclick="saveJournal()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Trade Modal ─── -->
+<div class="modal-overlay" id="modal-trade">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>📊 매매기록 추가</h3>
+      <button class="modal-close" onclick="closeModal('modal-trade')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>날짜</label>
+        <input type="date" id="tr-date">
+      </div>
+      <div class="form-group">
+        <label>종목명</label>
+        <input type="text" id="tr-symbol" placeholder="BTCUSDT">
+      </div>
+      <div class="form-group">
+        <label>진입가</label>
+        <input type="number" id="tr-entry" placeholder="0" step="any">
+      </div>
+      <div class="form-group">
+        <label>청산가</label>
+        <input type="number" id="tr-exit" placeholder="0" step="any">
+      </div>
+      <div class="form-group">
+        <label>손익 % (자동계산)</label>
+        <input type="number" id="tr-pnl" placeholder="진입/청산가 입력 시 자동" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>보유기간</label>
+        <input type="text" id="tr-duration" placeholder="예: 3일">
+      </div>
+      <div class="form-group">
+        <label>승/패</label>
+        <select id="tr-result"><option>승</option><option>패</option></select>
+      </div>
+      <div class="form-group">
+        <label>진입한 요일</label>
+        <select id="tr-entry-day">
+          <option>월요일 아침</option><option>월요일 밤</option>
+          <option>화요일 아침</option><option>화요일 밤</option>
+          <option>수요일 아침</option><option>수요일 밤</option>
+          <option>목요일 아침</option><option>목요일 밤</option>
+          <option>금요일 아침</option><option>금요일 밤</option>
+          <option>토요일 아침</option><option>토요일 밤</option>
+          <option>일요일 아침</option><option>일요일 밤</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>청산한 요일</label>
+        <select id="tr-exit-day">
+          <option>월요일 아침</option><option>월요일 밤</option>
+          <option>화요일 아침</option><option>화요일 밤</option>
+          <option>수요일 아침</option><option>수요일 밤</option>
+          <option>목요일 아침</option><option>목요일 밤</option>
+          <option>금요일 아침</option><option>금요일 밤</option>
+          <option>토요일 아침</option><option>토요일 밤</option>
+          <option>일요일 아침</option><option>일요일 밤</option>
+        </select>
+      </div>
+      <div class="form-group form-row">
+        <label>메모 (패턴, 시장 상황...)</label>
+        <textarea id="tr-memo" rows="3"></textarea>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:16px">차트 스크린샷</div>
+    <div class="img-drop" id="tr-drop" onclick="document.getElementById('tr-img-input').click()">
+      <input type="file" id="tr-img-input" multiple accept="image/*" onchange="addImages(event,'tr')">
+      📎 Profit / Loss 차트 이미지 첨부 (최대 4장)
+    </div>
+    <div class="img-previews" id="tr-previews"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-trade')">취소</button>
+      <button class="btn btn-primary" id="tr-save-btn" onclick="saveTrade()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Lightbox ─── -->
+<div id="lightbox" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+</div>
+
+<!-- ─── Toast ─── -->
+<div id="toast"></div>
+
+<script>
+/* ── Firebase config (shared with all HB platforms) ── */
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDEPq3SqOCiltpmesT3vP9Jp7a_ujFou1k",
+  authDomain:        "daily-task-planner-9187f.firebaseapp.com",
+  projectId:         "daily-task-planner-9187f",
+  storageBucket:     "daily-task-planner-9187f.firebasestorage.app",
+  messagingSenderId: "309757618979",
+  appId:             "1:309757618979:web:79fbdc11fbfbcdffa9ba96"
+};
+const AUTH_SUFFIX = "@hilliard.buffshire.internal";
+
+const fbApp  = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(FIREBASE_CONFIG);
+const db     = firebase.firestore();
+const auth   = firebase.auth();
+
+/* ── Constants ── */
+const EXCHANGES = [
+  { id:'upbit',     name:'업비트',    cur:'KRW', group:'krw' },
+  { id:'bithumb',   name:'빗썸',      cur:'KRW', group:'krw' },
+  { id:'core',      name:'Core',      cur:'USD', group:'usd' },
+  { id:'mexc',      name:'MEXC',      cur:'USD', group:'usd' },
+  { id:'binance',   name:'방엑스',    cur:'USD', group:'usd' },
+  { id:'coinbase',  name:'코인베이스', cur:'USD', group:'usd' },
+  { id:'robinhood', name:'로빈후드',  cur:'USD', group:'usd' },
+];
+const DAYS = ['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
+
+/* ── State ── */
+let trades  = [];
+let journal = [];
+const pending = { jnl: [], tr: [] };
+const charts  = {};
+
+/* ── Auth ── */
+auth.onAuthStateChanged(user => {
+  if (user) {
+    const name = user.email ? user.email.replace(AUTH_SUFFIX, '') : user.displayName || '—';
+    document.getElementById('user-name').textContent = name;
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    boot();
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+window.doLogin = async function () {
+  const id  = document.getElementById('auth-id').value.trim();
+  const pw  = document.getElementById('auth-pw').value;
+  const err = document.getElementById('auth-err');
+  if (!id || !pw) { showErr('아이디와 비밀번호를 입력하세요.'); return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = '로그인 중...';
+  err.style.display = 'none';
+
+  try {
+    await auth.signInWithEmailAndPassword(id.toLowerCase() + AUTH_SUFFIX, pw);
+  } catch (e) {
+    let msg = '로그인 실패. 아이디와 비밀번호를 확인하세요.';
+    if (e.code === 'auth/too-many-requests') msg = '로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.';
+    showErr(msg);
+    btn.disabled = false; btn.textContent = '로그인';
+  }
+};
+
+function showErr(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+document.getElementById('auth-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => auth.signOut());
+
+/* ── Boot ── */
+async function boot() {
+  buildExchInputs();
+  document.getElementById('jnl-date').value = today();
+  document.getElementById('tr-date').value  = today();
+  document.getElementById('jnl-filter-month').value = today().slice(0,7);
+  await Promise.all([fetchTrades(), fetchJournal()]);
+  renderDashboard();
+}
+
+/* ── Navigation ── */
+document.querySelectorAll('.nav-item').forEach(el =>
+  el.addEventListener('click', () => goTo(el.dataset.view))
+);
+window.goTo = function (v) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
+  if (v === 'dashboard')   renderDashboard();
+  if (v === 'journal')     renderJournal();
+  if (v === 'trades')      { renderTrades(); renderTradesCurve(); }
+  if (v === 'seasonality') renderSeasonality();
+};
+
+/* ── Exchange inputs ── */
+function buildExchInputs() {
+  ['krw','usd'].forEach(grp => {
+    document.getElementById(`exch-${grp}`).innerHTML =
+      EXCHANGES.filter(e => e.group === grp).map(e => `
+        <div class="exch-row">
+          <div class="exch-name">${e.name}</div>
+          <input type="number" id="ex-o-${e.id}" placeholder="시작 (${e.cur})" oninput="calcJnlTotals()" step="any">
+          <input type="number" id="ex-c-${e.id}" placeholder="마감 (${e.cur})" oninput="calcJnlTotals()" step="any">
+        </div>`).join('');
+  });
+}
+
+window.calcJnlTotals = function () {
+  let open = 0, close = 0;
+  EXCHANGES.filter(e => e.group === 'usd').forEach(e => {
+    open  += +document.getElementById(`ex-o-${e.id}`)?.value || 0;
+    close += +document.getElementById(`ex-c-${e.id}`)?.value || 0;
+  });
+  const profit = close - open;
+  const rate   = open ? (profit / open * 100).toFixed(2) : '—';
+  document.getElementById('jnl-total').value  = close  ? `$${fmtN(close)}`  : '';
+  document.getElementById('jnl-profit').value = profit ? `${profit >= 0 ? '+' : ''}$${fmtN(profit)}` : '';
+  document.getElementById('jnl-rate').value   = open   ? `${rate}%` : '';
+};
+
+/* ── Data fetchers ── */
+async function fetchTrades() {
+  const snap = await db.collection('trading_trades').orderBy('date','asc').get();
+  trades = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function fetchJournal() {
+  const snap = await db.collection('trading_journal').orderBy('date','desc').get();
+  journal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/* ── Dashboard ── */
+function renderDashboard() {
+  const n    = trades.length;
+  const wins = trades.filter(t => t.result === '승').length;
+  const wr   = n ? (wins/n*100).toFixed(1) : 0;
+  const cum  = n ? +(trades[n-1]?.cumulative || 0) : 0;
+  const avgP = n ? (trades.reduce((a,t)=>a+(+t.pnl||0),0)/n).toFixed(2) : 0;
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card c-gold"><div class="stat-label">총 매매</div><div class="stat-value">${n}회</div></div>
+    <div class="stat-card ${n&&wins/n>=0.5?'c-green':'c-red'}">
+      <div class="stat-label">승률</div><div class="stat-value">${wr}%</div>
+      <div class="stat-sub">${wins}승 ${n-wins}패</div>
+    </div>
+    <div class="stat-card ${cum>=0?'c-green':'c-red'}">
+      <div class="stat-label">누적 수익률</div><div class="stat-value">${cum}%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">평균 손익%</div>
+      <div class="stat-value ${+avgP>=0?'pos':'neg'}">${avgP}%</div>
+    </div>`;
+
+  document.getElementById('dash-recent').innerHTML =
+    [...trades].reverse().slice(0,6).map(t => `
+      <tr>
+        <td>${t.date}</td><td>${t.symbol}</td>
+        <td class="${+t.pnl>=0?'pos':'neg'}">${t.pnl}%</td>
+        <td><span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span></td>
+        <td class="${+t.cumulative>=0?'pos':'neg'}">${t.cumulative}%</td>
+      </tr>`).join('') || `<tr><td colspan="5" class="empty">매매기록 없음</td></tr>`;
+
+  mkLine('chart-cumulative', trades.map(t=>t.date), trades.map(t=>+t.cumulative||0), '누적수익%');
+  mkDonut('chart-winrate', wins, n-wins);
+}
+
+/* ── Journal ── */
+window.renderJournal = function () {
+  const fm = document.getElementById('jnl-filter-month').value;
+  let data = fm ? journal.filter(e => e.date?.startsWith(fm)) : journal;
+
+  document.getElementById('journal-tbody').innerHTML = data.map(e => {
+    const excCells = EXCHANGES.map(ex => {
+      const v = e.exchanges?.[ex.id]?.close;
+      return `<td>${v ? fmtN(v) : '—'}</td>`;
+    }).join('');
+    const imgs = (e.images||[]).map(b64 =>
+      `<img src="${b64}" style="width:32px;height:21px;object-fit:cover;border-radius:3px;cursor:pointer;margin:1px" onclick="openLB('${b64}')">`
+    ).join('');
+    return `<tr>
+      <td>${e.date}</td>${excCells}
+      <td>${e.totalSeed ? '$'+fmtN(e.totalSeed) : '—'}</td>
+      <td class="${+e.profit>=0?'pos':'neg'}">${e.profit ? ('+$'+fmtN(e.profit)) : '—'}</td>
+      <td class="${+e.rate>=0?'pos':'neg'}">${e.rate ? e.rate+'%' : '—'}</td>
+      <td style="color:var(--text-dim);font-size:0.78rem">${e.withdrawal||''}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;font-size:0.78rem;color:var(--text-dim)">${e.memo||''}</td>
+      <td>${imgs}<button class="btn btn-danger btn-sm" style="margin-left:4px" onclick="del('trading_journal','${e.id}')">삭제</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="14" class="empty">이 달 기록 없음</td></tr>`;
+};
+
+window.openJournalModal = function () {
+  pending.jnl = [];
+  document.getElementById('jnl-previews').innerHTML = '';
+  document.getElementById('jnl-memo').value = '';
+  document.getElementById('jnl-withdrawal').value = '';
+  document.getElementById('jnl-total').value = '';
+  document.getElementById('jnl-profit').value = '';
+  document.getElementById('jnl-rate').value = '';
+  EXCHANGES.forEach(e => {
+    const o = document.getElementById(`ex-o-${e.id}`);
+    const c = document.getElementById(`ex-c-${e.id}`);
+    if (o) o.value = ''; if (c) c.value = '';
+  });
+  document.getElementById('modal-journal').classList.add('open');
+};
+
+window.saveJournal = async function () {
+  const date = document.getElementById('jnl-date').value;
+  if (!date) return toast('날짜를 선택하세요','err');
+  setSaving('jnl-save-btn', true);
+
+  const exchanges = {};
+  let usdOpen = 0, usdClose = 0;
+  EXCHANGES.forEach(e => {
+    const o = +document.getElementById(`ex-o-${e.id}`)?.value || 0;
+    const c = +document.getElementById(`ex-c-${e.id}`)?.value || 0;
+    exchanges[e.id] = { open: o, close: c };
+    if (e.group === 'usd') { usdOpen += o; usdClose += c; }
+  });
+
+  const profit = +(usdClose - usdOpen).toFixed(2);
+  const rate   = usdOpen ? +(profit/usdOpen*100).toFixed(2) : 0;
+  const imgs   = await compressImages(pending.jnl);
+
+  await db.collection('trading_journal').add({
+    date, exchanges,
+    totalSeed:  +usdClose.toFixed(2),
+    profit, rate,
+    withdrawal: document.getElementById('jnl-withdrawal').value,
+    memo:       document.getElementById('jnl-memo').value,
+    images: imgs,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await fetchJournal();
+  renderJournal();
+  closeModal('modal-journal');
+  setSaving('jnl-save-btn', false);
+  toast('매매일지 저장됨','ok');
+};
+
+/* ── Trades ── */
+window.renderTrades = function () {
+  const srch   = document.getElementById('tr-search').value.toLowerCase();
+  const result = document.getElementById('tr-filter-result').value;
+  const day    = document.getElementById('tr-filter-day').value;
+
+  let data = [...trades].reverse();
+  if (srch)   data = data.filter(t => t.symbol?.toLowerCase().includes(srch));
+  if (result) data = data.filter(t => t.result === result);
+  if (day)    data = data.filter(t => t.entryDay?.startsWith(day));
+
+  document.getElementById('trades-tbody').innerHTML = data.map(t => {
+    const imgs = (t.images||[]).map(b64 =>
+      `<img src="${b64}" style="width:32px;height:21px;object-fit:cover;border-radius:3px;cursor:pointer;margin:1px" onclick="openLB('${b64}')">`
+    ).join('');
+    return `<tr>
+      <td>${t.date}</td><td>${t.symbol}</td>
+      <td>${fmtN(t.entry)}</td><td>${fmtN(t.exit)}</td>
+      <td class="${+t.pnl>=0?'pos':'neg'}">${t.pnl}%</td>
+      <td>${t.duration||'—'}</td>
+      <td><span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span></td>
+      <td class="${+t.cumulative>=0?'pos':'neg'}">${t.cumulative}%</td>
+      <td style="font-size:0.78rem">${t.entryDay||''}</td>
+      <td style="font-size:0.78rem">${t.exitDay||''}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:0.78rem;color:var(--text-dim)">${t.memo||''}</td>
+      <td>${imgs}<button class="btn btn-danger btn-sm" style="margin-left:4px" onclick="del('trading_trades','${t.id}')">삭제</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="12" class="empty">기록 없음</td></tr>`;
+};
+
+function renderTradesCurve() {
+  mkLine('chart-trades-curve', trades.map(t=>t.date), trades.map(t=>+t.cumulative||0), '누적수익%');
+}
+
+window.openTradeModal = function () {
+  pending.tr = [];
+  document.getElementById('tr-previews').innerHTML = '';
+  ['tr-symbol','tr-entry','tr-exit','tr-pnl','tr-duration','tr-memo'].forEach(id =>
+    document.getElementById(id).value = '');
+  document.getElementById('tr-result').value = '승';
+  document.getElementById('modal-trade').classList.add('open');
+};
+
+document.getElementById('tr-entry').addEventListener('input', calcPnl);
+document.getElementById('tr-exit').addEventListener('input', calcPnl);
+function calcPnl() {
+  const e = +document.getElementById('tr-entry').value;
+  const x = +document.getElementById('tr-exit').value;
+  if (e && x) {
+    const p = ((x-e)/e*100).toFixed(2);
+    document.getElementById('tr-pnl').value    = p;
+    document.getElementById('tr-result').value = +p >= 0 ? '승' : '패';
+  }
+}
+
+window.saveTrade = async function () {
+  const date   = document.getElementById('tr-date').value;
+  const symbol = document.getElementById('tr-symbol').value.trim();
+  if (!date || !symbol) return toast('날짜와 종목을 입력하세요','err');
+  setSaving('tr-save-btn', true);
+
+  const pnl  = +(+document.getElementById('tr-pnl').value || 0).toFixed(2);
+  const prev = trades.length ? +(trades[trades.length-1].cumulative||0) : 0;
+  const cum  = +(prev + pnl).toFixed(2);
+  const imgs = await compressImages(pending.tr);
+
+  await db.collection('trading_trades').add({
+    date, symbol,
+    entry:    +document.getElementById('tr-entry').value    || 0,
+    exit:     +document.getElementById('tr-exit').value     || 0,
+    pnl, duration: document.getElementById('tr-duration').value,
+    result:   document.getElementById('tr-result').value,
+    cumulative: cum,
+    entryDay: document.getElementById('tr-entry-day').value,
+    exitDay:  document.getElementById('tr-exit-day').value,
+    memo:     document.getElementById('tr-memo').value,
+    images: imgs,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await fetchTrades();
+  renderTrades(); renderTradesCurve(); renderDashboard(); renderSeasonality();
+  closeModal('modal-trade');
+  setSaving('tr-save-btn', false);
+  toast('매매기록 저장됨','ok');
+};
+
+/* ── Seasonality ── */
+function renderSeasonality() {
+  if (!trades.length) {
+    document.getElementById('season-stats').innerHTML =
+      `<div class="stat-card" style="grid-column:1/-1"><div class="stat-label">안내</div><div class="stat-value" style="font-size:1rem">매매기록을 추가하면 분석이 표시됩니다</div></div>`;
+    return;
+  }
+
+  const eStats = {};
+  DAYS.forEach(d => { eStats[d] = { w:0, n:0, pnl:0 }; });
+  trades.forEach(t => {
+    const d = DAYS.find(d => t.entryDay?.startsWith(d));
+    if (d) { eStats[d].n++; if (t.result==='승') eStats[d].w++; eStats[d].pnl += +t.pnl||0; }
+  });
+
+  const xStats = {};
+  DAYS.forEach(d => { xStats[d] = { w:0, n:0 }; });
+  trades.forEach(t => {
+    const d = DAYS.find(d => t.exitDay?.startsWith(d));
+    if (d) { xStats[d].n++; if (t.result==='승') xStats[d].w++; }
+  });
+
+  const best     = DAYS.filter(d=>eStats[d].n>0).sort((a,b)=>eStats[b].w/eStats[b].n - eStats[a].w/eStats[a].n)[0];
+  const worst    = DAYS.filter(d=>eStats[d].n>0).sort((a,b)=>eStats[a].w/eStats[a].n - eStats[b].w/eStats[b].n)[0];
+  const bestExit = DAYS.filter(d=>xStats[d].n>0).sort((a,b)=>xStats[b].w/xStats[b].n - xStats[a].w/xStats[a].n)[0];
+
+  document.getElementById('season-stats').innerHTML = `
+    <div class="stat-card c-green"><div class="stat-label">최고 진입 요일</div><div class="stat-value">${best||'—'}</div><div class="stat-sub">승률 ${best?Math.round(eStats[best].w/eStats[best].n*100):0}%</div></div>
+    <div class="stat-card c-red"><div class="stat-label">최저 진입 요일</div><div class="stat-value">${worst||'—'}</div><div class="stat-sub">승률 ${worst?Math.round(eStats[worst].w/eStats[worst].n*100):0}%</div></div>
+    <div class="stat-card c-gold"><div class="stat-label">최다 청산 요일</div><div class="stat-value">${bestExit||'—'}</div><div class="stat-sub">청산 승률 ${bestExit?Math.round(xStats[bestExit].w/xStats[bestExit].n*100):0}%</div></div>
+    <div class="stat-card"><div class="stat-label">분석 샘플</div><div class="stat-value">${trades.length}건</div></div>`;
+
+  const wr  = DAYS.map(d => eStats[d].n ? +(eStats[d].w/eStats[d].n*100).toFixed(1) : 0);
+  const avg = DAYS.map(d => eStats[d].n ? +(eStats[d].pnl/eStats[d].n).toFixed(2) : 0);
+  const xwr = DAYS.map(d => xStats[d].n ? +(xStats[d].w/xStats[d].n*100).toFixed(1) : 0);
+  const frq = DAYS.map(d => eStats[d].n);
+
+  mkBar('chart-entry-wr',  DAYS, wr,  '승률%', DAYS.map((_,i)=>wr[i]>=50?'rgba(76,175,122,0.75)':'rgba(207,102,121,0.75)'));
+  mkBar('chart-entry-pnl', DAYS, avg, '평균손익%', avg.map(v=>v>=0?'rgba(76,175,122,0.75)':'rgba(207,102,121,0.75)'));
+  mkBar('chart-exit-wr',   DAYS, xwr, '승률%', DAYS.map((_,i)=>xwr[i]>=50?'rgba(107,143,206,0.75)':'rgba(207,102,121,0.75)'));
+  mkBar('chart-freq',      DAYS, frq, '횟수', 'rgba(201,168,76,0.7)');
+}
+
+/* ── Chart helpers ── */
+const C = { x: { ticks:{color:'#a09880',font:{size:10}}, grid:{color:'rgba(201,168,76,0.08)'} },
+             y: { ticks:{color:'#a09880',font:{size:10}}, grid:{color:'rgba(201,168,76,0.08)'} } };
+
+function mkLine(id, labels, data, label) {
+  charts[id]?.destroy();
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type:'line', data:{ labels, datasets:[{
+      label, data, borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,0.1)',
+      fill:true, tension:0.3, pointRadius:3, pointBackgroundColor:'#c9a84c',
+    }]},
+    options:{ responsive:true, plugins:{legend:{display:false}}, scales:C }
+  });
+}
+
+function mkDonut(id, wins, losses) {
+  charts[id]?.destroy();
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels:['승','패'], datasets:[{ data:[wins,losses],
+      backgroundColor:['rgba(76,175,122,0.8)','rgba(207,102,121,0.8)'], borderWidth:0 }] },
+    options:{ responsive:true, plugins:{ legend:{ labels:{ color:'#a09880', font:{size:11} } } } }
+  });
+}
+
+function mkBar(id, labels, data, label, color) {
+  charts[id]?.destroy();
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type:'bar', data:{ labels, datasets:[{
+      label, data, backgroundColor: Array.isArray(color)?color:Array(labels.length).fill(color),
+      borderRadius:4,
+    }]},
+    options:{ responsive:true, plugins:{legend:{display:false}}, scales:C }
+  });
+}
+
+/* ── TradingView ── */
+let tvLoaded = false;
+window.loadTV = function () {
+  const symbol    = document.getElementById('tv-symbol').value  || 'BINANCE:BTCUSDT';
+  const interval  = document.getElementById('tv-interval').value || 'D';
+  const container = document.getElementById('tv-widget-container');
+  container.innerHTML = '';
+  container.style.height = '420px';
+
+  const go = () => new window.TradingView.widget({
+    container_id:'tv-widget-container', width:'100%', height:420,
+    symbol, interval, timezone:'Asia/Seoul', theme:'dark',
+    style:'1', locale:'kr', toolbar_bg:'#13131a',
+    enable_publishing:false, save_image:false,
+  });
+
+  if (tvLoaded) { go(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://s3.tradingview.com/tv.js';
+  s.onload = () => { tvLoaded = true; go(); };
+  document.head.appendChild(s);
+};
+
+/* ── Images (canvas compress → base64) ── */
+window.addImages = function (ev, prefix) {
+  const MAX = 4;
+  const files = Array.from(ev.target.files);
+  const room  = MAX - pending[prefix].length;
+  if (room <= 0) { toast('이미지는 최대 4장까지 첨부 가능합니다','err'); return; }
+
+  files.slice(0, room).forEach(file => {
+    const url = URL.createObjectURL(file);
+    pending[prefix].push({ file, url });
+    const wrap = document.getElementById(`${prefix}-previews`);
+    const el = document.createElement('div');
+    el.className = 'img-thumb';
+    el.dataset.url = url;
+    el.innerHTML = `<img src="${url}" onclick="openLB('${url}')"><button class="img-thumb-del" onclick="rmImg('${prefix}','${url}',this.closest('.img-thumb'))">✕</button>`;
+    wrap.appendChild(el);
+  });
+
+  if (files.length > room) toast(`이미지는 최대 4장까지만 첨부됩니다`, 'err');
+  ev.target.value = '';
+};
+
+window.rmImg = function (prefix, url, el) {
+  pending[prefix] = pending[prefix].filter(i => i.url !== url);
+  URL.revokeObjectURL(url);
+  el.remove();
+};
+
+function compressImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX_W = 1100;
+      let { width, height } = img;
+      if (width > MAX_W) { height = Math.round(height * MAX_W / width); width = MAX_W; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.65));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+async function compressImages(items) {
+  const results = await Promise.all(items.map(({file}) => compressImage(file)));
+  return results.filter(Boolean);
+}
+
+document.querySelectorAll('.img-drop').forEach(area => {
+  const prefix = area.id.startsWith('jnl') ? 'jnl' : 'tr';
+  area.addEventListener('dragover',  e => { e.preventDefault(); area.classList.add('drag'); });
+  area.addEventListener('dragleave', ()  => area.classList.remove('drag'));
+  area.addEventListener('drop', e => {
+    e.preventDefault(); area.classList.remove('drag');
+    addImages({ target:{ files: e.dataTransfer.files } }, prefix);
+  });
+});
+
+/* ── Delete ── */
+window.del = async function (col, id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  await db.collection(col).doc(id).delete();
+  if (col === 'trading_trades')  { await fetchTrades();  renderTrades(); renderDashboard(); renderSeasonality(); }
+  if (col === 'trading_journal') { await fetchJournal(); renderJournal(); }
+  toast('삭제됨','ok');
+};
+
+/* ── Modal ── */
+window.closeModal = id => document.getElementById(id).classList.remove('open');
+
+/* ── Lightbox ── */
+window.openLB        = url => { document.getElementById('lightbox-img').src = url; document.getElementById('lightbox').classList.add('open'); };
+window.closeLightbox = ()  => document.getElementById('lightbox').classList.remove('open');
+
+/* ── Toast ── */
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `show ${type}`;
+  setTimeout(() => el.className = '', 2600);
+}
+
+/* ── Helpers ── */
+const today = () => new Date().toISOString().split('T')[0];
+const fmtN  = n  => n != null ? (+n).toLocaleString(undefined,{maximumFractionDigits:2}) : '—';
+
+function setSaving(btnId, saving) {
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = saving; btn.textContent = saving ? '저장 중...' : '저장'; }
+}
+</script>
+</body>
+</html>
