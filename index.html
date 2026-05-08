@@ -180,9 +180,8 @@
       .sidebar{display:none}.content{margin-left:0;padding:16px}
       .chart-row,.season-grid{grid-template-columns:1fr}
     }
-    .login-cross{width:48px;height:58px;margin:0 auto 22px;position:relative;filter:drop-shadow(0 0 14px rgba(201,168,76,.55))}
-    .login-cross::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:9px;height:100%;background:linear-gradient(180deg,#e8c97a,#c9a84c,#8a6f2e);border-radius:2px}
-    .login-cross::after{content:'';position:absolute;top:28%;width:100%;height:9px;background:linear-gradient(90deg,#8a6f2e,#e8c97a,#8a6f2e);border-radius:2px}
+    .login-cross-svg{filter:drop-shadow(0 0 12px rgba(212,170,80,.5));animation:lc-glow 3s ease-in-out infinite alternate;display:block;margin:0 auto 22px}
+    @keyframes lc-glow{from{filter:drop-shadow(0 0 8px rgba(212,170,80,.4))}to{filter:drop-shadow(0 0 22px rgba(212,170,80,.85))}}
     .sb-cross{display:flex;align-items:center;gap:3px;width:14px;height:17px;position:relative;flex-shrink:0;margin-right:6px}
     .sb-cross::before{content:'';position:absolute;left:50%;transform:translateX(-50%);width:4px;height:100%;background:var(--ac);border-radius:1px;opacity:.85}
     .sb-cross::after{content:'';position:absolute;top:28%;width:100%;height:4px;background:var(--ac);border-radius:1px;opacity:.85}
@@ -192,8 +191,20 @@
 
 <div id="auth-screen" class="screen">
   <div class="screen-card">
-    <div class="login-cross"></div>
-    <h2>HB 매매일지</h2>
+    <svg class="login-cross-svg" width="54" height="66" viewBox="0 0 72 88" fill="none">
+      <rect x="29" y="0" width="14" height="88" rx="3" fill="url(#lcGradV)"/>
+      <rect x="0" y="22" width="72" height="14" rx="3" fill="url(#lcGradH)"/>
+      <ellipse cx="36" cy="29" rx="20" ry="14" fill="rgba(212,170,80,0.1)"/>
+      <defs>
+        <linearGradient id="lcGradV" x1="36" y1="0" x2="36" y2="88" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#f0d070"/><stop offset="45%" stop-color="#d4aa50"/><stop offset="100%" stop-color="#8a6820"/>
+        </linearGradient>
+        <linearGradient id="lcGradH" x1="0" y1="29" x2="72" y2="29" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#8a6820"/><stop offset="50%" stop-color="#f0d070"/><stop offset="100%" stop-color="#8a6820"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <h2>매매일지</h2>
     <p>Hilliard Buffshire 전용<br>매매일지 &amp; 시즈널리티 분석 플랫폼</p>
     <div class="auth-err" id="auth-err"></div>
     <div class="fg"><label>아이디</label><input type="text" id="auth-id" placeholder="아이디" autocomplete="username"></div>
