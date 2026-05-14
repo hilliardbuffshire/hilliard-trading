@@ -174,6 +174,18 @@
     #toast.ok{border-color:var(--green);color:var(--green)}
     #toast.err{border-color:var(--red);color:var(--red)}
     .empty{color:var(--tx2);font-size:.83rem;padding:36px;text-align:center}
+    .badge.open-status{background:var(--ac-dim);color:var(--ac-l)}
+    .tr-main-row{cursor:pointer}
+    .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
+    .tr-expand-inner{padding:14px 18px;background:var(--bg3);display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+    .tr-expand-section{display:flex;flex-direction:column;gap:6px;flex:1;min-width:140px}
+    .tr-expand-label{font-size:.68rem;color:var(--tx2);text-transform:uppercase;letter-spacing:.07em}
+    .tr-expand-memo{font-size:.83rem;color:var(--tx);line-height:1.6;white-space:pre-wrap;max-width:500px}
+    .tr-expand-imgs{display:flex;gap:8px;flex-wrap:wrap}
+    .tr-expand-imgs img{width:140px;height:95px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s}
+    .tr-expand-imgs img:hover{opacity:.82}
+    .tr-expand-details{display:flex;gap:14px;flex-wrap:wrap;font-size:.79rem;color:var(--tx2)}
+    .tr-expand-details span{white-space:nowrap}
 
     @media(max-width:900px){
       :root{--sidebar-w:0px}
@@ -285,7 +297,7 @@
       <div class="chart-card" style="margin-bottom:22px"><h3>누적 수익률 곡선</h3><canvas id="chart-trades-curve"></canvas></div>
       <div class="filter-bar">
         <input type="text" placeholder="종목 검색..." id="tr-search" oninput="renderTrades()">
-        <select id="tr-filter-result" onchange="renderTrades()"><option value="">전체</option><option>승</option><option>패</option></select>
+        <select id="tr-filter-result" onchange="renderTrades()"><option value="">전체</option><option>승</option><option>패</option><option>진행중</option></select>
         <select id="tr-filter-day" onchange="renderTrades()">
           <option value="">진입 요일 전체</option>
           <option>월요일</option><option>화요일</option><option>수요일</option><option>목요일</option><option>금요일</option><option>토요일</option><option>일요일</option>
@@ -407,7 +419,7 @@
     <div class="section-label">진입 / 청산 <span class="auto-badge">손익 자동계산</span></div>
     <div class="form-grid" style="margin-bottom:12px">
       <div class="form-group"><label>진입가</label><input type="number" id="tr-entry" placeholder="0" step="any" oninput="calcPnl()"></div>
-      <div class="form-group"><label>청산가</label><input type="number" id="tr-exit" placeholder="0" step="any" oninput="calcPnl()"></div>
+      <div class="form-group"><label>청산가 <span style="font-size:.65rem;color:var(--tx2);font-weight:300">(나중에 입력 가능)</span></label><input type="number" id="tr-exit" placeholder="미청산 시 비워두기" step="any" oninput="calcPnl()"></div>
       <div class="form-group"><label>손익 % <span class="auto-badge">자동</span></label><input type="number" id="tr-pnl" step="0.01" placeholder="자동" readonly></div>
       <div class="form-group"><label>승/패 <span class="auto-badge">자동</span></label><select id="tr-result" disabled style="opacity:.8"><option>승</option><option>패</option></select></div>
     </div>
@@ -656,8 +668,8 @@ function renderDashboard(){
     [...trades].reverse().slice(0,6).map(t=>`<tr>
       <td>${t.date}</td><td>${t.symbol}</td>
       <td><span class="badge ${t.direction==='숏'?'short':'long'}">${t.direction||'롱'}</span></td>
-      <td class="${+t.pnl>=0?'pos':'neg'}">${t.pnl}%</td>
-      <td><span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span></td>
+      <td class="${+t.pnl>=0?'pos':'neg'}">${t.result==='진행중'?'—':t.pnl+'%'}</td>
+      <td>${t.result==='진행중'?'<span class="badge open-status">진행중</span>':`<span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span>`}</td>
       <td class="${+t.cumulative>=0?'pos':'neg'}">${t.cumulative}%</td>
     </tr>`).join('')||`<tr><td colspan="6" class="empty">매매기록 없음</td></tr>`;
   const byMonth={};
@@ -756,23 +768,51 @@ window.renderTrades=function(){
   if(s)data=data.filter(t=>t.symbol?.toLowerCase().includes(s));
   if(r)data=data.filter(t=>t.result===r);
   if(d)data=data.filter(t=>t.entryDay?.startsWith(d));
-  document.getElementById('trades-tbody').innerHTML=data.map(t=>{
-    const imgs=(t.images||[]).map(b=>`<img src="${b}" style="width:72px;height:48px;object-fit:cover;border-radius:4px;cursor:zoom-in;margin:1px;border:1px solid var(--bd)" onclick="openLB('${b}')">`).join('');
+  const tbody=document.getElementById('trades-tbody');
+  tbody.innerHTML=data.map(t=>{
     const dir=t.direction||'롱';
-    return`<tr>
-      <td>${t.date}</td><td>${t.symbol}</td>
+    const isOpen=t.result==='진행중';
+    const resultBadge=isOpen
+      ?`<span class="badge open-status">진행중</span>`
+      :`<span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span>`;
+    const imgs=(t.images||[]).map(b=>
+      `<img data-src="${b}" class="tr-lb-img" style="width:140px;height:95px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)">`
+    ).join('');
+    const detailLine=`진입: ${t.entryDay||'—'} · 청산: ${t.exitDay||'—'} · 크기: ${t.size||'—'} · 기간: ${t.duration||'—'}`;
+    return`<tr class="tr-main-row" onclick="toggleTradeExpand('${t.id}')">
+      <td>${t.date}</td><td><strong>${t.symbol}</strong></td>
       <td><span class="badge ${dir==='숏'?'short':'long'}">${dir}</span></td>
-      <td>${fmtN(t.entry)}</td><td>${fmtN(t.exit)}</td>
-      <td class="${+t.pnl>=0?'pos':'neg'}">${t.pnl}%</td>
+      <td>${fmtN(t.entry)}</td>
+      <td>${isOpen?'<span style="color:var(--ac-l);font-size:.75rem">미청산</span>':fmtN(t.exit)}</td>
+      <td class="${+t.pnl>=0?'pos':'neg'}">${isOpen?'—':t.pnl+'%'}</td>
       <td style="font-size:.78rem;color:var(--tx2)">${t.size||'—'}</td>
       <td>${t.duration||'—'}</td>
-      <td><span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span></td>
+      <td>${resultBadge}</td>
       <td class="${+t.cumulative>=0?'pos':'neg'}">${t.cumulative}%</td>
       <td style="font-size:.78rem">${t.entryDay||''}</td><td style="font-size:.78rem">${t.exitDay||''}</td>
       <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-size:.78rem;color:var(--tx2)">${t.memo||''}</td>
-      <td>${imgs}<button class="btn btn-edit btn-sm" style="margin-left:4px" onclick="editTrade('${t.id}')">편집</button><button class="btn btn-danger btn-sm" style="margin-left:2px" onclick="del('trading_trades','${t.id}')">삭제</button></td>
+      <td><button class="btn btn-edit btn-sm" onclick="event.stopPropagation();editTrade('${t.id}')">편집</button><button class="btn btn-danger btn-sm" style="margin-left:2px" onclick="event.stopPropagation();del('trading_trades','${t.id}')">삭제</button></td>
+    </tr>
+    <tr class="tr-detail-row" id="tr-detail-${t.id}" style="display:none">
+      <td colspan="14">
+        <div class="tr-expand-inner">
+          ${t.memo?`<div class="tr-expand-section"><div class="tr-expand-label">메모</div><div class="tr-expand-memo">${t.memo}</div></div>`:''}
+          ${imgs?`<div class="tr-expand-section"><div class="tr-expand-label">스크린샷</div><div class="tr-expand-imgs">${imgs}</div></div>`:''}
+          <div class="tr-expand-section"><div class="tr-expand-label">상세</div><div class="tr-expand-details">${detailLine}</div></div>
+        </div>
+      </td>
     </tr>`;
   }).join('')||`<tr><td colspan="14" class="empty">기록 없음</td></tr>`;
+  tbody.querySelectorAll('.tr-lb-img').forEach(img=>{
+    img.addEventListener('click',e=>{e.stopPropagation();openLB(img.dataset.src);});
+  });
+};
+window.toggleTradeExpand=function(id){
+  const row=document.getElementById(`tr-detail-${id}`);
+  if(!row)return;
+  const willOpen=row.style.display==='none';
+  document.querySelectorAll('.tr-detail-row').forEach(r=>r.style.display='none');
+  if(willOpen)row.style.display='table-row';
 };
 function renderTradesCurve(){mkLine('chart-trades-curve',trades.map(t=>t.date),trades.map(t=>+t.cumulative||0));}
 window.editTrade=function(id){const t=trades.find(x=>x.id===id);if(t)openTradeModal(t);};
@@ -844,14 +884,16 @@ window.saveTrade=async function(){
   if(!date||!symbol)return toast('날짜와 종목을 입력하세요','err');
   setSaving('tr-save-btn',true);
   try{
-    const pnl=+(+document.getElementById('tr-pnl').value||0).toFixed(2);
+    const exitVal=+document.getElementById('tr-exit').value;
+    const pnl=exitVal?+(+document.getElementById('tr-pnl').value||0).toFixed(2):0;
+    const result=exitVal?document.getElementById('tr-result').value:'진행중';
     const newImgs=await compressImages(pend.tr);
     const images=[...savedImgs.tr,...newImgs];
     const data={
       date,symbol,direction:document.getElementById('tr-direction').value,
-      entry:+document.getElementById('tr-entry').value||0,exit:+document.getElementById('tr-exit').value||0,
+      entry:+document.getElementById('tr-entry').value||0,exit:exitVal||0,
       pnl,size:document.getElementById('tr-size').value,duration:document.getElementById('tr-duration').value,
-      result:document.getElementById('tr-result').value,
+      result,
       entryDay:document.getElementById('tr-entry-day').value,exitDay:document.getElementById('tr-exit-day').value,
       memo:document.getElementById('tr-memo').value,
       tvSymbol:document.getElementById('tv-symbol-tr').value,
