@@ -6,6 +6,7 @@
   <title>매매일지</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -195,6 +196,16 @@
     .login-cross-svg{filter:drop-shadow(0 0 16px rgba(212,170,80,.6));animation:lc-glow 3s ease-in-out infinite alternate;display:block;margin:0 auto 26px}
     @keyframes lc-glow{from{filter:drop-shadow(0 0 10px rgba(212,170,80,.4))}to{filter:drop-shadow(0 0 28px rgba(212,170,80,.9))}}
     .sb-cross-svg{filter:drop-shadow(0 0 8px rgba(212,170,80,.45));display:block;margin:0 auto 10px}
+
+    .tr-chart-cell{width:72px;padding:5px 8px!important}
+    .tr-chart-cell img{width:64px;height:42px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s;display:block}
+    .tr-chart-cell img:hover{opacity:.8}
+    .undo-bar{position:fixed;bottom:80px;right:24px;background:var(--bg2);border:1px solid var(--ac);color:var(--tx);padding:10px 16px;border-radius:8px;z-index:9997;display:flex;gap:10px;align-items:center;font-size:.82rem;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+    .import-file-zone{border:2px dashed var(--bd);border-radius:8px;padding:20px;text-align:center;cursor:pointer;color:var(--tx2);font-size:.83rem;transition:border-color .15s}
+    .import-file-zone:hover,.import-file-zone.drag{border-color:var(--ac);color:var(--tx)}
+    .import-file-zone input{display:none}
+    .import-preview{max-height:260px;overflow-y:auto;margin-top:12px}
+    .import-preview table{font-size:.74rem}
   </style>
 </head>
 <body>
@@ -292,7 +303,10 @@
     <section id="view-trades" class="view">
       <div class="page-header">
         <div class="page-title">매매기록<span>Trade Records</span></div>
-        <button class="btn btn-primary" onclick="openTradeModal()">+ 새 매매</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="openImportModal('trades')">📥 가져오기</button>
+          <button class="btn btn-primary" onclick="openTradeModal()">+ 새 매매</button>
+        </div>
       </div>
       <div class="chart-card" style="margin-bottom:22px"><h3>누적 수익률 곡선</h3><canvas id="chart-trades-curve"></canvas></div>
       <div class="filter-bar">
@@ -304,7 +318,7 @@
         </select>
       </div>
       <div class="table-card"><div class="tbl-wrap"><table>
-        <thead><tr><th>날짜</th><th>종목</th><th>방향</th><th>진입가</th><th>청산가</th><th>손익%</th><th>크기</th><th>기간</th><th>결과</th><th>누적</th><th>진입요일</th><th>청산요일</th><th>메모</th><th></th></tr></thead>
+        <thead><tr><th>날짜</th><th>종목</th><th>방향</th><th>진입가</th><th>청산가</th><th>손익%</th><th>크기</th><th>기간</th><th>결과</th><th>누적</th><th>진입요일</th><th>청산요일</th><th>메모</th><th>차트</th><th></th></tr></thead>
         <tbody id="trades-tbody"></tbody>
       </table></div></div>
     </section>
@@ -313,7 +327,10 @@
     <section id="view-journal" class="view">
       <div class="page-header">
         <div class="page-title">매매일지<span>Daily Journal</span></div>
-        <button class="btn btn-primary" onclick="openJournalModal()">+ 새 기록</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="openImportModal('journal')">📥 가져오기</button>
+          <button class="btn btn-primary" onclick="openJournalModal()">+ 새 기록</button>
+        </div>
       </div>
       <div class="filter-bar"><input type="month" id="jnl-filter-month" onchange="renderJournal()"></div>
       <div class="table-card"><div class="tbl-wrap"><table>
@@ -428,6 +445,7 @@
     <div class="form-grid" style="margin-bottom:12px">
       <div class="form-group"><label>포지션 크기</label><input type="text" id="tr-size" placeholder="예: 5% / $500"></div>
       <div class="form-group"><label>보유기간</label><input type="text" id="tr-duration" placeholder="예: 3일"></div>
+      <div class="form-group"><label>청산날짜 <span style="font-size:.65rem;color:var(--tx2);font-weight:300">(선택 — 차트 마커용)</span></label><input type="date" id="tr-exit-date"></div>
       <div class="form-group"><label>진입 요일</label>
         <select id="tr-entry-day">
           <option>월요일 아침</option><option>월요일 밤</option><option>화요일 아침</option><option>화요일 밤</option>
@@ -481,8 +499,39 @@
   </div>
 </div>
 
+<!-- Import Modal -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal modal-wide">
+    <div class="modal-hdr"><h3 id="imp-title">📥 데이터 가져오기</h3><button class="modal-close" onclick="closeModal('modal-import')">✕</button></div>
+    <div style="color:var(--tx2);font-size:.82rem;margin-bottom:14px;line-height:1.6">
+      엑셀(.xlsx) 또는 CSV 파일을 업로드하면 자동으로 인식합니다.<br>
+      <span style="color:var(--ac-l)">AI 분석 탭에서 API 키를 저장하면 Claude가 컬럼을 자동 매핑합니다.</span>
+    </div>
+    <div class="import-file-zone" id="imp-drop" onclick="document.getElementById('imp-file-input').click()">
+      <input type="file" id="imp-file-input" accept=".xlsx,.xls,.csv" onchange="handleImportFile(event)">
+      📎 클릭하거나 파일을 여기에 드롭하세요
+    </div>
+    <div id="imp-progress" style="display:none;padding:10px 0;color:var(--ac-l);font-size:.83rem" id="imp-prog-wrap">
+      <span id="imp-progress-msg"></span>
+    </div>
+    <div id="imp-preview" class="import-preview" style="display:none">
+      <div style="font-size:.78rem;color:var(--tx2);margin-bottom:6px" id="imp-count"></div>
+      <div class="tbl-wrap"><table><thead id="imp-prev-head"></thead><tbody id="imp-prev-body"></tbody></table></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-import')">취소</button>
+      <button class="btn btn-primary" id="imp-confirm-btn" style="display:none" onclick="confirmImport()">가져오기 확인</button>
+    </div>
+  </div>
+</div>
+
 <div id="lightbox" onclick="closeLB()"><button id="lb-close" onclick="closeLB()">✕</button><img id="lb-img" src="" alt="" onclick="event.stopPropagation()"></div>
 <div id="toast"></div>
+<div id="undo-bar" class="undo-bar" style="display:none">
+  <span id="undo-msg"></span>
+  <button class="btn btn-secondary btn-sm" onclick="undoImport()">되돌리기</button>
+  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('undo-bar').style.display='none'">✕</button>
+</div>
 
 <script>
 /* ── Firebase ── */
@@ -779,6 +828,8 @@ window.renderTrades=function(){
       `<img data-src="${b}" class="tr-lb-img" style="width:140px;height:95px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)">`
     ).join('');
     const detailLine=`진입: ${t.entryDay||'—'} · 청산: ${t.exitDay||'—'} · 크기: ${t.size||'—'} · 기간: ${t.duration||'—'}`;
+    const chartSrc=t.autoChart||(t.images&&t.images[0])||'';
+    const thumb=chartSrc?`<img src="${chartSrc}" onclick="event.stopPropagation();openLB('${chartSrc}')" loading="lazy" alt="차트">`:' ';
     return`<tr class="tr-main-row" onclick="toggleTradeExpand('${t.id}')">
       <td>${t.date}</td><td><strong>${t.symbol}</strong></td>
       <td><span class="badge ${dir==='숏'?'short':'long'}">${dir}</span></td>
@@ -791,18 +842,20 @@ window.renderTrades=function(){
       <td class="${+t.cumulative>=0?'pos':'neg'}">${t.cumulative}%</td>
       <td style="font-size:.78rem">${t.entryDay||''}</td><td style="font-size:.78rem">${t.exitDay||''}</td>
       <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-size:.78rem;color:var(--tx2)">${t.memo||''}</td>
+      <td class="tr-chart-cell">${thumb}</td>
       <td><button class="btn btn-edit btn-sm" onclick="event.stopPropagation();editTrade('${t.id}')">편집</button><button class="btn btn-danger btn-sm" style="margin-left:2px" onclick="event.stopPropagation();del('trading_trades','${t.id}')">삭제</button></td>
     </tr>
     <tr class="tr-detail-row" id="tr-detail-${t.id}" style="display:none">
-      <td colspan="14">
+      <td colspan="15">
         <div class="tr-expand-inner">
           ${t.memo?`<div class="tr-expand-section"><div class="tr-expand-label">메모</div><div class="tr-expand-memo">${t.memo}</div></div>`:''}
+          ${t.autoChart?`<div class="tr-expand-section"><div class="tr-expand-label">자동 차트</div><div class="tr-expand-imgs"><img src="${t.autoChart}" onclick="openLB('${t.autoChart}')" style="width:220px;height:auto;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)"></div></div>`:''}
           ${imgs?`<div class="tr-expand-section"><div class="tr-expand-label">스크린샷</div><div class="tr-expand-imgs">${imgs}</div></div>`:''}
           <div class="tr-expand-section"><div class="tr-expand-label">상세</div><div class="tr-expand-details">${detailLine}</div></div>
         </div>
       </td>
     </tr>`;
-  }).join('')||`<tr><td colspan="14" class="empty">기록 없음</td></tr>`;
+  }).join('')||`<tr><td colspan="15" class="empty">기록 없음</td></tr>`;
   tbody.querySelectorAll('.tr-lb-img').forEach(img=>{
     img.addEventListener('click',e=>{e.stopPropagation();openLB(img.dataset.src);});
   });
@@ -834,6 +887,7 @@ window.openTradeModal=function(trade=null){
     document.getElementById('tr-memo').value=trade.memo||'';
     document.getElementById('tr-entry-day').value=trade.entryDay||'월요일 아침';
     document.getElementById('tr-exit-day').value=trade.exitDay||'월요일 아침';
+    document.getElementById('tr-exit-date').value=trade.exitDate||'';
     document.getElementById('tv-symbol-tr').value=trade.tvSymbol||`BINANCE:${trade.symbol||'BTCUSDT'}`;
     document.getElementById('tv-interval-tr').value=trade.tvInterval||'D';
     savedImgs.tr=[...(trade.images||[])];
@@ -841,7 +895,7 @@ window.openTradeModal=function(trade=null){
   }else{
     document.getElementById('tr-modal-title').textContent='📊 매매기록 추가';
     document.getElementById('tr-date').value=today();
-    ['tr-symbol','tr-entry','tr-exit','tr-pnl','tr-size','tr-duration','tr-memo'].forEach(id=>document.getElementById(id).value='');
+    ['tr-symbol','tr-entry','tr-exit','tr-pnl','tr-size','tr-duration','tr-memo','tr-exit-date'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tr-direction').value='롱';
     document.getElementById('tr-result').value='승';
     document.getElementById('tv-symbol-tr').value='BINANCE:BTCUSDT';
@@ -889,17 +943,23 @@ window.saveTrade=async function(){
     const result=exitVal?document.getElementById('tr-result').value:'진행중';
     const newImgs=await compressImages(pend.tr);
     const images=[...savedImgs.tr,...newImgs];
+    const tvSym=document.getElementById('tv-symbol-tr').value;
+    const tvInt=document.getElementById('tv-interval-tr').value;
+    const exitDate=document.getElementById('tr-exit-date').value||'';
+    const direction=document.getElementById('tr-direction').value;
+    const entryVal=+document.getElementById('tr-entry').value||0;
+    const autoChart=await genAutoChart(tvSym,tvInt,date,exitDate,entryVal,exitVal||0,direction).catch(()=>null);
     const data={
-      date,symbol,direction:document.getElementById('tr-direction').value,
-      entry:+document.getElementById('tr-entry').value||0,exit:exitVal||0,
+      date,symbol,direction,
+      entry:entryVal,exit:exitVal||0,
       pnl,size:document.getElementById('tr-size').value,duration:document.getElementById('tr-duration').value,
-      result,
+      result,exitDate,
       entryDay:document.getElementById('tr-entry-day').value,exitDay:document.getElementById('tr-exit-day').value,
       memo:document.getElementById('tr-memo').value,
-      tvSymbol:document.getElementById('tv-symbol-tr').value,
-      tvInterval:document.getElementById('tv-interval-tr').value,
+      tvSymbol:tvSym,tvInterval:tvInt,
       images,
     };
+    if(autoChart)data.autoChart=autoChart;
     if(JSON.stringify(data).length>950000){toast('이미지 용량 초과. 이미지를 줄여주세요.','err');return;}
     if(editTradeId){
       await db.collection('trading_trades').doc(editTradeId).update(data);
@@ -1114,13 +1174,30 @@ function renderAIResults(){
 /* ── Misc ── */
 window.del=async function(col,id){
   if(!confirm('삭제하시겠습니까?'))return;
-  try{
-    await db.collection(col).doc(id).delete();
-    if(col==='trading_trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();}
-    if(col==='trading_journal'){await fetchJournal();renderJournal();}
-    toast('삭제됨','ok');
-  }catch(e){toast('삭제 실패','err');}
+  if(col==='trading_trades'){
+    const prev=[...trades];
+    trades=trades.filter(t=>t.id!==id);
+    localRecalcCum();
+    renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();
+    try{
+      await db.collection(col).doc(id).delete();
+      await recalcCumulatives();
+      renderTrades();renderTradesCurve();renderDashboard();
+    }catch(e){trades=prev;localRecalcCum();renderTrades();renderDashboard();toast('삭제 실패','err');return;}
+  }else{
+    const prev=[...journal];
+    journal=journal.filter(j=>j.id!==id);
+    renderJournal();
+    try{await db.collection(col).doc(id).delete();await fetchJournal();renderJournal();}
+    catch(e){journal=prev;renderJournal();toast('삭제 실패','err');return;}
+  }
+  toast('삭제됨','ok');
 };
+function localRecalcCum(){
+  let cum=0;
+  trades.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:0);
+  trades.forEach(t=>{cum=+(cum+(+t.pnl||0)).toFixed(2);t.cumulative=cum;});
+}
 window.closeModal=id=>document.getElementById(id).classList.remove('open');
 window.openLB=url=>{document.getElementById('lb-img').src=url;document.getElementById('lightbox').classList.add('open');};
 window.closeLB=()=>document.getElementById('lightbox').classList.remove('open');
@@ -1128,6 +1205,177 @@ function toast(msg,t=''){const el=document.getElementById('toast');el.textConten
 const today=()=>new Date().toISOString().split('T')[0];
 const fmtN=n=>n!=null?(+n).toLocaleString(undefined,{maximumFractionDigits:2}):'—';
 function setSaving(id,s){const b=document.getElementById(id);if(b){b.disabled=s;b.textContent=s?'저장 중...':'저장';}}
+
+/* ── Auto Chart (Binance OHLC + entry/exit markers) ── */
+async function genAutoChart(tvSym,tvInt,tradeDate,exitDate,entryP,exitP,dir){
+  const sym=(tvSym||'').replace(/^[^:]+:/,'').toUpperCase();
+  if(!sym)return null;
+  const W=480,H=240,pad=32;
+  const can=document.createElement('canvas');can.width=W;can.height=H;
+  const ctx=can.getContext('2d');
+  const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim()||'#14141d';
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  const ivMap={'D':'1d','240':'4h','60':'1h','W':'1w','30':'30m','15':'15m'};
+  const iv=ivMap[tvInt]||'1d';
+  let closes=[],dates=[];
+  try{
+    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${['1d','1w'].includes(iv)?90:120}`);
+    if(r.ok){const raw=await r.json();if(Array.isArray(raw)&&raw.length){closes=raw.map(d=>parseFloat(d[4]));dates=raw.map(d=>new Date(d[0]).toISOString().split('T')[0]);}}
+  }catch(e){}
+
+  if(!closes.length&&!entryP)return null;
+  if(!closes.length){closes=[entryP*(dir==='숏'?1.02:.98),entryP,exitP||entryP*(dir==='숏'?.98:1.02)];dates=[tradeDate,tradeDate,exitDate||tradeDate];}
+
+  const allP=[...closes,entryP,exitP].filter(Boolean);
+  const minP=Math.min(...allP)*.997,maxP=Math.max(...allP)*1.003;
+  const toY=p=>H-pad-((p-minP)/(maxP-minP||1))*(H-pad*2);
+  const toX=i=>pad+(i/Math.max(closes.length-1,1))*(W-pad*2);
+
+  ctx.beginPath();closes.forEach((p,i)=>i===0?ctx.moveTo(toX(i),toY(p)):ctx.lineTo(toX(i),toY(p)));
+  ctx.lineTo(toX(closes.length-1),H-pad);ctx.lineTo(pad,H-pad);ctx.closePath();
+  ctx.fillStyle='rgba(212,170,80,.12)';ctx.fill();
+
+  ctx.beginPath();closes.forEach((p,i)=>i===0?ctx.moveTo(toX(i),toY(p)):ctx.lineTo(toX(i),toY(p)));
+  ctx.strokeStyle='#d4aa50';ctx.lineWidth=1.5;ctx.stroke();
+
+  ctx.setLineDash([5,3]);ctx.font='10px Inter,sans-serif';
+  if(entryP){const ey=toY(entryP);ctx.strokeStyle='#5ec98a';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(pad,ey);ctx.lineTo(W-pad,ey);ctx.stroke();ctx.fillStyle='#5ec98a';ctx.fillText('진입 '+fmtN(entryP),pad+4,Math.max(ey-3,pad+12));}
+  if(exitP){const xy=toY(exitP);ctx.strokeStyle='#e07888';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(pad,xy);ctx.lineTo(W-pad,xy);ctx.stroke();ctx.fillStyle='#e07888';ctx.fillText('청산 '+fmtN(exitP),pad+4,Math.max(xy-3,pad+24));}
+  ctx.setLineDash([]);
+
+  if(tradeDate&&dates.length){const idx=dates.findIndex(d=>d>=tradeDate);if(idx>=0){ctx.strokeStyle='rgba(94,201,138,.45)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(toX(idx),pad);ctx.lineTo(toX(idx),H-pad);ctx.stroke();}}
+  if(exitDate&&dates.length){const idx=dates.findIndex(d=>d>=exitDate);if(idx>=0){ctx.strokeStyle='rgba(224,120,136,.45)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(toX(idx),pad);ctx.lineTo(toX(idx),H-pad);ctx.stroke();}}
+
+  return can.toDataURL('image/jpeg',.45);
+}
+
+/* ── Import ── */
+let importMode='trades',importParsed=[],importUndo=null;
+
+window.openImportModal=function(mode){
+  importMode=mode;importParsed=[];
+  document.getElementById('imp-title').textContent=mode==='trades'?'📥 매매기록 가져오기':'📥 매매일지 가져오기';
+  document.getElementById('imp-progress').style.display='none';
+  document.getElementById('imp-preview').style.display='none';
+  document.getElementById('imp-confirm-btn').style.display='none';
+  document.getElementById('imp-file-input').value='';
+  document.getElementById('modal-import').classList.add('open');
+};
+
+window.handleImportFile=async function(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const prog=document.getElementById('imp-progress'),msg=document.getElementById('imp-progress-msg');
+  prog.style.display='block';msg.textContent='파일 분석 중...';
+  document.getElementById('imp-preview').style.display='none';
+  document.getElementById('imp-confirm-btn').style.display='none';
+  try{
+    const rows=await parseExcelFile(file);
+    if(!rows.length){msg.textContent='데이터를 찾을 수 없습니다.';return;}
+    const apiKey=localStorage.getItem('hb_api_key');
+    let parsed;
+    if(apiKey){msg.textContent='AI로 데이터 인식 중...';parsed=await importWithAI(rows,importMode,apiKey);}
+    else{msg.textContent='컬럼 자동 매핑 중...';parsed=autoMapColumns(rows,importMode);}
+    importParsed=parsed;
+    showImportPreview(parsed);
+    prog.style.display='none';
+  }catch(e){msg.textContent='오류: '+(e.message||'파일을 읽을 수 없습니다');}
+};
+
+function parseExcelFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'binary',cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        resolve(XLSX.utils.sheet_to_json(ws,{raw:false,dateNF:'YYYY-MM-DD'}));
+      }catch(err){reject(err);}
+    };
+    reader.onerror=reject;reader.readAsBinaryString(file);
+  });
+}
+
+async function importWithAI(rows,mode,apiKey){
+  const sample=rows.slice(0,30);
+  const fields=mode==='trades'
+    ?'date(YYYY-MM-DD), symbol(종목명), direction(롱 또는 숏), entry(숫자), exit(숫자 또는 null), size(문자열), duration(문자열), memo(문자열)'
+    :'date(YYYY-MM-DD), totalSeed(USD 총시드 숫자), profit(수익금 숫자), rate(수익률 숫자), memo(문자열)';
+  const prompt=`다음 스프레드시트 데이터를 파싱해서 JSON 배열로 변환하세요. 각 행은 ${mode==='trades'?'매매기록':'매매일지'}입니다.\n필요한 필드: ${fields}\n데이터: ${JSON.stringify(sample)}\nJSON 배열만 반환. 마크다운 없이.`;
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-allow-browser':'true','content-type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:4000,messages:[{role:'user',content:prompt}]})});
+  if(!resp.ok)throw new Error('AI API 오류 '+resp.status);
+  const data=await resp.json();
+  const text=data.content?.[0]?.text||'[]';
+  const match=text.match(/\[[\s\S]*\]/);
+  if(!match)throw new Error('AI 응답 파싱 실패');
+  return JSON.parse(match[0]);
+}
+
+function autoMapColumns(rows,mode){
+  if(!rows.length)return[];
+  const keys=Object.keys(rows[0]);
+  const find=(...ns)=>keys.find(k=>ns.some(n=>k.toLowerCase().includes(n.toLowerCase())));
+  if(mode==='trades'){
+    const dc=find('날짜','date','일자'),sc=find('종목','symbol','ticker'),dirc=find('방향','direction'),ec=find('진입가','entry','진입'),xc=find('청산가','exit','청산'),szc=find('크기','size','포지션'),duc=find('기간','duration','보유'),mc=find('메모','memo','note');
+    return rows.map(r=>({date:dc?(r[dc]||'').toString().slice(0,10):today(),symbol:sc?r[sc]||'':'',direction:dirc?r[dirc]||'롱':'롱',entry:ec?parseFloat(r[ec])||0:0,exit:xc?parseFloat(r[xc])||0:0,size:szc?r[szc]||'':'',duration:duc?r[duc]||'':'',memo:mc?r[mc]||'':''})).filter(r=>r.date&&r.symbol);
+  }else{
+    const dc=find('날짜','date'),tc=find('시드','seed','총','total'),pc=find('수익금','profit'),rc=find('수익률','rate'),mc=find('메모','memo');
+    return rows.map(r=>({date:dc?(r[dc]||'').toString().slice(0,10):today(),totalSeed:tc?parseFloat(r[tc])||0:0,profit:pc?parseFloat(r[pc])||0:0,rate:rc?parseFloat(r[rc])||0:0,memo:mc?r[mc]||'':''})).filter(r=>r.date);
+  }
+}
+
+function showImportPreview(parsed){
+  if(!parsed.length){document.getElementById('imp-progress').style.display='block';document.getElementById('imp-progress-msg').textContent='인식된 데이터가 없습니다.';return;}
+  const cols=Object.keys(parsed[0]);
+  document.getElementById('imp-count').textContent=`${parsed.length}건 인식됨 (최대 5건 미리보기)`;
+  document.getElementById('imp-prev-head').innerHTML=`<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+  document.getElementById('imp-prev-body').innerHTML=parsed.slice(0,5).map(r=>`<tr>${cols.map(c=>`<td>${r[c]??''}</td>`).join('')}</tr>`).join('');
+  document.getElementById('imp-preview').style.display='block';
+  document.getElementById('imp-confirm-btn').style.display='inline-block';
+}
+
+window.confirmImport=async function(){
+  if(!importParsed.length)return;
+  const btn=document.getElementById('imp-confirm-btn');
+  btn.disabled=true;btn.textContent='저장 중...';
+  const ids=[];
+  try{
+    const col=importMode==='trades'?'trading_trades':'trading_journal';
+    for(const item of importParsed){
+      if(importMode==='trades'){
+        const x=+item.exit||0,e=+item.entry||0;
+        const pnl=x&&e?+(item.direction==='숏'?(e-x)/e*100:(x-e)/e*100).toFixed(2):0;
+        Object.assign(item,{entry:e,exit:x,pnl,result:x?(pnl>=0?'승':'패'):'진행중',cumulative:0,entryDay:item.entryDay||'',exitDay:item.exitDay||'',exitDate:item.exitDate||'',images:[],createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      }else{
+        Object.assign(item,{exchanges:{},images:[],createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      }
+      const ref=await db.collection(col).add(item);ids.push(ref.id);
+    }
+    importUndo={col,ids};
+    if(importMode==='trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();}
+    else{await fetchJournal();renderJournal();}
+    closeModal('modal-import');
+    toast(`${ids.length}건 가져오기 완료`,'ok');
+    document.getElementById('undo-msg').textContent=`${ids.length}건 가져오기 완료 —`;
+    document.getElementById('undo-bar').style.display='flex';
+  }catch(e){console.error(e);toast('가져오기 실패: '+(e.message||'오류'),'err');}
+  finally{btn.disabled=false;btn.textContent='가져오기 확인';}
+};
+
+window.undoImport=async function(){
+  if(!importUndo)return;
+  const{col,ids}=importUndo;
+  try{
+    for(const id of ids)await db.collection(col).doc(id).delete();
+    importUndo=null;document.getElementById('undo-bar').style.display='none';
+    if(col==='trading_trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();}
+    else{await fetchJournal();renderJournal();}
+    toast('가져오기 취소됨','ok');
+  }catch(e){toast('되돌리기 실패','err');}
+};
+
+/* Import drag-drop */
+(()=>{const z=document.getElementById('imp-drop');if(!z)return;z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag');});z.addEventListener('dragleave',()=>z.classList.remove('drag'));z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('drag');const f=e.dataTransfer.files[0];if(f){const inp=document.getElementById('imp-file-input');const dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;handleImportFile({target:{files:[f]}});}});})();
 </script>
 </body>
 </html>
