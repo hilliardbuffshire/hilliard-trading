@@ -483,11 +483,18 @@
       <button class="btn btn-secondary btn-sm" id="lctool-cursor" onclick="setLCTool(null)">✋ 이동</button>
       <button class="btn btn-secondary btn-sm" id="lctool-hline" onclick="setLCTool('hline')">— 수평선</button>
       <button class="btn btn-secondary btn-sm" id="lctool-tline" onclick="setLCTool('tline')">╱ 추세선</button>
+      <button class="btn btn-secondary btn-sm" id="lctool-pct" onclick="setLCTool('pct')">% 측정</button>
       <button class="btn btn-secondary btn-sm" onclick="clearLCDrawings()">🗑 전체삭제</button>
       <div style="flex:1"></div>
-      <input type="text" id="lc-sym" value="BTCUSDT" placeholder="심볼" style="width:110px">
-      <select id="lc-int"><option value="1d">1일</option><option value="1w">주봉</option><option value="4h">4시간</option><option value="12h">12시간</option><option value="1h">1시간</option><option value="30m">30분</option></select>
-      <button class="btn btn-secondary btn-sm" onclick="reloadLC()">새로고침</button>
+      <input type="text" id="lc-sym" value="BTCUSDT" placeholder="심볼" style="width:110px" oninput="lcSymDebounced()">
+      <select id="lc-int" onchange="reloadLC()">
+        <option value="1m">1분</option><option value="3m">3분</option><option value="5m">5분</option>
+        <option value="15m">15분</option><option value="30m">30분</option>
+        <option value="1h">1시간</option><option value="2h">2시간</option><option value="4h">4시간</option>
+        <option value="6h">6시간</option><option value="12h">12시간</option>
+        <option value="1d" selected>1일</option><option value="3d">3일</option>
+        <option value="1w">주봉</option><option value="1M">월봉</option>
+      </select>
     </div>
     <div id="lc-loading" style="display:none;padding:12px;color:var(--tx2);font-size:.80rem;text-align:center">차트 로딩 중…</div>
     <div id="lc-container" style="height:420px;border-radius:8px;overflow:hidden;border:1px solid var(--bd)"></div>
@@ -1016,7 +1023,8 @@ function renderSeasonality(){
 
 /* ── Lightweight Charts (Trade Modal) ── */
 let lcChart=null,lcSeries=null,lcEntryLine=null,lcExitLine=null;
-let lcTool=null,lcHLines=[],lcTLines=[],lcDrawStart=null;
+let lcTool=null,lcHLines=[],lcTLines=[],lcPctLines=[],lcDrawStart=null,lcSymTimer=null;
+window.lcSymDebounced=function(){clearTimeout(lcSymTimer);lcSymTimer=setTimeout(()=>initLC(),700);};
 
 function ivTVtoLC(tv){return({'D':'1d','W':'1w','240':'4h','120':'12h','60':'1h','30':'30m','15':'15m'})[tv]||'1d';}
 
@@ -1046,7 +1054,7 @@ async function initLC(){
   document.getElementById('lc-loading').style.display='block';
   container.innerHTML='';
   try{
-    const limit=['1d','1w'].includes(iv)?200:300;
+    const limit=['1d','3d','1w','1M'].includes(iv)?200:['1h','2h','4h','6h','12h'].includes(iv)?300:500;
     const raw=await fetchKlines(sym,iv,limit);
     const candles=raw.map(d=>({time:Math.floor(d[0]/1000),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4])}));
     const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim()||'#14141d';
@@ -1085,6 +1093,27 @@ function lcClickHandler(ev){
       if(pts[0].time!==pts[1].time)s.setData(pts);
       lcTLines.push(s);lcDrawStart=null;
     }
+  }else if(lcTool==='pct'){
+    if(!lcDrawStart){
+      lcDrawStart={price,time};
+      /* 시작점 표시 */
+      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#a0a0b0',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'▶ 시작'});
+    }else{
+      const pct=((price-lcDrawStart.price)/lcDrawStart.price*100);
+      const sign=pct>=0?'+':'';
+      const col=pct>=0?'#5ec98a':'#e07888';
+      /* 연결선 */
+      const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
+      let lineSeries=null;
+      if(pts[0].time!==pts[1].time){
+        lineSeries=lcChart.addLineSeries({color:col,lineWidth:2,lineStyle:LightweightCharts.LineStyle.Solid,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        lineSeries.setData(pts);
+      }
+      /* 끝점 라벨 */
+      const endPL=lcSeries.createPriceLine({price,color:col,lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:`${sign}${pct.toFixed(2)}%`});
+      lcPctLines.push({lineSeries,startPL:lcDrawStart.startPL,endPL});
+      lcDrawStart=null;
+    }
   }
 }
 
@@ -1099,8 +1128,10 @@ function updateLCLines(){
 }
 
 window.setLCTool=function(tool){
+  /* 시작점 임시 마커 제거 */
+  if(lcDrawStart?.startPL&&lcSeries){try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}}
   lcTool=tool;lcDrawStart=null;
-  ['cursor','hline','tline'].forEach(t=>{const b=document.getElementById(`lctool-${t}`);if(b){b.style.background='';b.style.borderColor='';}});
+  ['cursor','hline','tline','pct'].forEach(t=>{const b=document.getElementById(`lctool-${t}`);if(b){b.style.background='';b.style.borderColor='';}});
   const b=document.getElementById(`lctool-${tool||'cursor'}`);
   if(b){b.style.background='var(--ac-dim)';b.style.borderColor='var(--ac)';}
   const c=document.getElementById('lc-container');if(c)c.style.cursor=tool?'crosshair':'default';
@@ -1109,7 +1140,12 @@ window.setLCTool=function(tool){
 window.clearLCDrawings=function(){
   if(lcSeries)lcHLines.forEach(pl=>{try{lcSeries.removePriceLine(pl);}catch(e){}});
   if(lcChart)lcTLines.forEach(s=>{try{lcChart.removeSeries(s);}catch(e){}});
-  lcHLines=[];lcTLines=[];lcDrawStart=null;
+  lcPctLines.forEach(({lineSeries,startPL,endPL})=>{
+    if(lcChart&&lineSeries)try{lcChart.removeSeries(lineSeries);}catch(e){}
+    if(lcSeries&&startPL)try{lcSeries.removePriceLine(startPL);}catch(e){}
+    if(lcSeries&&endPL)try{lcSeries.removePriceLine(endPL);}catch(e){}
+  });
+  lcHLines=[];lcTLines=[];lcPctLines=[];lcDrawStart=null;
 };
 
 window.reloadLC=function(){initLC();};
