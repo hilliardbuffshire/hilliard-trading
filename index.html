@@ -184,8 +184,9 @@
     .tr-expand-label{font-size:.68rem;color:var(--tx2);text-transform:uppercase;letter-spacing:.07em}
     .tr-expand-memo{font-size:.83rem;color:var(--tx);line-height:1.6;white-space:pre-wrap;max-width:500px}
     .tr-expand-imgs{display:flex;gap:8px;flex-wrap:wrap}
-    .tr-expand-imgs img{width:140px;height:95px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s}
+    .tr-expand-imgs img{width:200px;height:132px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s}
     .tr-expand-imgs img:hover{opacity:.82}
+    .tr-expand-autochart img{width:100%!important;max-width:640px!important;height:auto!important;object-fit:contain!important}
     .tr-expand-details{display:flex;gap:14px;flex-wrap:wrap;font-size:.79rem;color:var(--tx2)}
     .tr-expand-details span{white-space:nowrap}
 
@@ -857,7 +858,7 @@ window.renderTrades=function(){
       <td colspan="15">
         <div class="tr-expand-inner">
           ${t.memo?`<div class="tr-expand-section"><div class="tr-expand-label">메모</div><div class="tr-expand-memo">${t.memo}</div></div>`:''}
-          ${t.autoChart?`<div class="tr-expand-section"><div class="tr-expand-label">자동 차트</div><div class="tr-expand-imgs"><img src="${t.autoChart}" onclick="openLB('${t.autoChart}')" style="width:220px;height:auto;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)"></div></div>`:''}
+          ${t.autoChart?`<div class="tr-expand-section" style="min-width:300px;flex:2"><div class="tr-expand-label">차트 캡처</div><div class="tr-expand-imgs tr-expand-autochart"><img src="${t.autoChart}" onclick="openLB('${t.autoChart}')"></div></div>`:''}
           ${imgs?`<div class="tr-expand-section"><div class="tr-expand-label">스크린샷</div><div class="tr-expand-imgs">${imgs}</div></div>`:''}
           <div class="tr-expand-section"><div class="tr-expand-label">상세</div><div class="tr-expand-details">${detailLine}</div></div>
         </div>
@@ -1019,20 +1020,34 @@ let lcTool=null,lcHLines=[],lcTLines=[],lcDrawStart=null;
 
 function ivTVtoLC(tv){return({'D':'1d','W':'1w','240':'4h','120':'12h','60':'1h','30':'30m','15':'15m'})[tv]||'1d';}
 
+async function fetchKlines(sym,iv,limit){
+  const endpoints=[
+    `https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`,
+    `https://api1.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`,
+    `https://data-api.binance.vision/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`,
+  ];
+  for(const url of endpoints){
+    try{
+      const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),6000);
+      const r=await fetch(url,{signal:ctrl.signal});clearTimeout(t);
+      if(r.ok){const d=await r.json();if(Array.isArray(d)&&d.length)return d;}
+    }catch(e){}
+  }
+  throw new Error('데이터 소스 접속 실패 (네트워크 확인)');
+}
+
 async function initLC(){
   const sym=(document.getElementById('lc-sym').value||'BTCUSDT').toUpperCase().replace(/^[^:]+:/,'');
   const iv=document.getElementById('lc-int').value||'1d';
   const container=document.getElementById('lc-container');
   if(!container)return;
   if(lcChart){try{lcChart.remove();}catch(e){}lcChart=null;lcSeries=null;lcEntryLine=null;lcExitLine=null;lcHLines=[];lcTLines=[];}
+  container.removeEventListener('click',lcClickHandler);
   document.getElementById('lc-loading').style.display='block';
   container.innerHTML='';
   try{
     const limit=['1d','1w'].includes(iv)?200:300;
-    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`);
-    if(!r.ok)throw new Error('Binance API 오류 '+r.status);
-    const raw=await r.json();
-    if(!Array.isArray(raw)||!raw.length)throw new Error('데이터 없음');
+    const raw=await fetchKlines(sym,iv,limit);
     const candles=raw.map(d=>({time:Math.floor(d[0]/1000),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4])}));
     const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim()||'#14141d';
     const tx=getComputedStyle(document.documentElement).getPropertyValue('--tx2').trim()||'#a09880';
