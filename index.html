@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://s3.tradingview.com/tv.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -191,7 +192,7 @@
     .tr-expand-details span{white-space:nowrap}
     /* expand 미디어 (전폭) */
     .tr-expand-media{background:var(--bg3);border-top:1px solid var(--bd);padding:10px 18px 14px}
-    .tr-expand-media-img img{width:auto;max-width:580px;height:auto;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);display:block}
+    .tr-expand-media-img img{width:100%;max-width:100%;height:auto;max-height:640px;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);display:block;background:var(--bg2)}
     .tr-expand-imgs-lg{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:14px;margin-top:6px}
     .tr-expand-imgs-lg img{width:100%;height:auto;max-height:720px;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s;background:var(--bg)}
     .tr-expand-imgs-lg img:hover{opacity:.82}
@@ -1010,7 +1011,7 @@ window.saveTrade=async function(){
     const exitVal=+document.getElementById('tr-exit').value;
     const pnl=exitVal?+(+document.getElementById('tr-pnl').value||0).toFixed(2):0;
     const result=exitVal?document.getElementById('tr-result').value:'진행중';
-    const newImgs=await compressImages(pend.tr);
+    const [newImgs,autoChart]=await Promise.all([compressImages(pend.tr),captureTradeChart()]);
     const images=[...savedImgs.tr,...newImgs];
     const exitDate=document.getElementById('tr-exit-date').value||'';
     const direction=document.getElementById('tr-direction').value;
@@ -1024,6 +1025,7 @@ window.saveTrade=async function(){
       memo:document.getElementById('tr-memo').value,
       images,
     };
+    if(autoChart)data.autoChart=autoChart;
     if(JSON.stringify(data).length>950000){toast('이미지 용량 초과. 이미지를 줄여주세요.','err');return;}
     if(editTradeId){
       await db.collection('trading_trades').doc(editTradeId).update(data);
@@ -1066,6 +1068,60 @@ function renderSeasonality(){
   mkBar('chart-entry-pnl',DAYS,avg,avg.map(v=>v>=0?'rgba(76,175,122,.75)':'rgba(207,102,121,.75)'));
   mkBar('chart-exit-wr',  DAYS,xwr,DAYS.map((_,i)=>xwr[i]>=50?'rgba(107,143,206,.75)':'rgba(207,102,121,.75)'));
   mkBar('chart-freq',     DAYS,DAYS.map(d=>eS[d].n),accent()+'b3');
+}
+
+/* ── Binance klines (캡처용) ── */
+async function fetchKlines(sym,iv,limit){
+  const endpoints=[
+    `https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`,
+    `https://api1.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`,
+    `https://data-api.binance.vision/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${limit}`,
+  ];
+  for(const url of endpoints){
+    try{
+      const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),7000);
+      const r=await fetch(url,{signal:ctrl.signal});clearTimeout(t);
+      if(r.ok){const d=await r.json();if(Array.isArray(d)&&d.length)return d;}
+    }catch(e){}
+  }
+  throw new Error('fetch failed');
+}
+
+/* 숨겨진 LC 차트로 진입/청산 라인 포함 스크린샷 캡처 */
+async function captureTradeChart(){
+  if(typeof LightweightCharts==='undefined')return null;
+  const sym=(document.getElementById('tr-symbol').value||'').trim().toUpperCase().replace(/^[^:]+:/,'');
+  if(!sym)return null;
+  const entry=+document.getElementById('tr-entry').value||0;
+  const exit=+document.getElementById('tr-exit').value||0;
+
+  const el=document.createElement('div');
+  el.style.cssText='position:fixed;left:-9999px;top:0;width:840px;height:420px;z-index:-1;pointer-events:none';
+  document.body.appendChild(el);
+  let chart=null;
+  try{
+    const raw=await fetchKlines(sym,'1d',180);
+    const candles=raw.map(d=>({time:Math.floor(d[0]/1000),open:parseFloat(d[1]),high:parseFloat(d[2]),low:parseFloat(d[3]),close:parseFloat(d[4])}));
+    chart=LightweightCharts.createChart(el,{
+      width:840,height:420,
+      layout:{background:{color:'#12121a'},textColor:'#a09880'},
+      grid:{vertLines:{color:'rgba(255,255,255,.04)'},horzLines:{color:'rgba(255,255,255,.04)'}},
+      crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+      rightPriceScale:{borderColor:'rgba(255,255,255,.1)'},
+      timeScale:{borderColor:'rgba(255,255,255,.1)',timeVisible:true},
+    });
+    const series=chart.addCandlestickSeries({upColor:'#4caf7a',downColor:'#cf6679',borderUpColor:'#4caf7a',borderDownColor:'#cf6679',wickUpColor:'#4caf7a',wickDownColor:'#cf6679'});
+    series.setData(candles);
+    if(entry)series.createPriceLine({price:entry,color:'#5ec98a',lineWidth:2,lineStyle:LightweightCharts.LineStyle.Dashed,axisLabelVisible:true,title:'▲ 진입'});
+    if(exit)series.createPriceLine({price:exit,color:'#e07888',lineWidth:2,lineStyle:LightweightCharts.LineStyle.Dashed,axisLabelVisible:true,title:'▼ 청산'});
+    chart.timeScale().fitContent();
+    await new Promise(r=>setTimeout(r,500));
+    return chart.takeScreenshot().toDataURL('image/jpeg',.85);
+  }catch(e){return null;}
+  finally{
+    if(chart)try{chart.remove();}catch(e){}
+    try{document.body.removeChild(el);}catch(e){}
+  }
 }
 
 /* ── TradingView Chart (Trade Modal) ── */
