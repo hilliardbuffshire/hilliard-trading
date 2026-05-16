@@ -196,20 +196,21 @@
     .tr-expand-imgs-lg img{height:240px;width:auto;max-width:100%;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s}
     .tr-expand-imgs-lg img:hover{opacity:.82}
     /* Lightweight Charts UI */
-    .lc-header-bar{display:flex;align-items:center;gap:6px;padding:5px 0;flex-wrap:wrap}
-    .lc-sym-inp{width:90px;font-size:.83rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--bd);background:var(--bg2);color:var(--tx)}
-    .lc-tf-row{display:flex;gap:1px;flex-wrap:wrap}
-    .lc-tf{padding:3px 7px;min-width:24px;font-size:.7rem;font-weight:600;border:none;border-radius:3px;background:transparent;color:var(--tx2);cursor:pointer;letter-spacing:.02em;transition:background .12s,color .12s;text-align:center}
+    .lc-bar{display:flex;align-items:center;gap:2px;padding:5px 0 6px;border-bottom:1px solid var(--bd);margin-bottom:6px;flex-wrap:wrap}
+    .lc-bar-sep{width:1px;height:16px;background:var(--bd);margin:0 6px;flex-shrink:0}
+    .lc-sym-inp{font-size:.85rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--tx);width:82px;cursor:text;transition:border .15s}
+    .lc-sym-inp:focus{border-color:var(--ac);background:var(--bg2);outline:none}
+    .lc-tf-row{display:flex;gap:0}
+    .lc-tf{padding:2px 7px;min-width:22px;font-size:.68rem;font-weight:600;border:none;border-radius:3px;background:transparent;color:var(--tx2);cursor:pointer;letter-spacing:.02em;transition:background .1s,color .1s;text-align:center;height:24px}
     .lc-tf:hover{background:var(--bg3);color:var(--tx)}
-    .lc-tf-act{background:var(--ac-dim)!important;color:var(--ac)!important}
-    .lc-chart-wrap{display:flex;position:relative}
-    .lc-vtoolbar{display:flex;flex-direction:column;gap:2px;padding:8px 4px;background:var(--bg3);border:1px solid var(--bd);border-right:none;border-radius:8px 0 0 8px;width:38px;flex-shrink:0;align-items:center}
-    .lc-vt{width:28px;height:28px;border:none;border-radius:4px;background:transparent;color:var(--tx2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s;padding:0;flex-shrink:0}
-    .lc-vt:hover{background:rgba(255,255,255,.07);color:var(--tx)}
-    .lc-vt.lc-vt-act{background:var(--ac-dim);color:var(--ac)}
-    .lc-vt.lc-vt-del:hover{background:rgba(207,102,121,.18);color:#cf6679}
-    .lc-vt-sep{width:20px;height:1px;background:var(--bd);margin:3px 0;flex-shrink:0}
-    .lc-pct-tip{position:absolute;background:rgba(10,10,16,.9);border:1px solid rgba(255,255,255,.13);border-radius:5px;padding:6px 12px;font-size:.78rem;color:#fff;pointer-events:none;white-space:nowrap;z-index:20;display:none;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+    .lc-tf-act{color:var(--ac)!important;font-weight:700!important}
+    .lc-tools-row{display:flex;gap:1px;margin-left:auto}
+    .lc-tool{width:26px;height:26px;border:none;border-radius:4px;background:transparent;color:var(--tx2);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background .12s,color .12s;flex-shrink:0}
+    .lc-tool:hover{background:var(--bg3);color:var(--tx)}
+    .lc-tool.lc-tool-act{background:var(--ac-dim);color:var(--ac)}
+    .lc-tool.lc-tool-del:hover{background:rgba(207,102,121,.18);color:#cf6679}
+    .lc-tool-sep{width:1px;height:16px;background:var(--bd);margin:0 4px;align-self:center;flex-shrink:0}
+    .lc-pct-tip{position:absolute;background:rgba(10,10,18,.9);border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:5px 11px;font-size:.76rem;color:#fff;pointer-events:none;white-space:nowrap;z-index:20;display:none;box-shadow:0 2px 10px rgba(0,0,0,.5)}
 
     @media(max-width:900px){
       :root{--sidebar-w:0px}
@@ -446,7 +447,7 @@
 
     <div class="section-label" style="margin-top:0">기본 정보</div>
     <div class="form-grid" style="margin-bottom:12px">
-      <div class="form-group"><label>날짜</label><input type="date" id="tr-date"></div>
+      <div class="form-group"><label>날짜</label><input type="date" id="tr-date" onchange="autoSetDay(this.value,'tr-entry-day')"></div>
       <div class="form-group"><label>종목명</label><input type="text" id="tr-symbol" placeholder="BTCUSDT" oninput="autoSetTvSymbol()"></div>
       <div class="form-group"><label>방향</label>
         <select id="tr-direction" onchange="calcPnl()">
@@ -468,7 +469,7 @@
     <div class="form-grid" style="margin-bottom:12px">
       <div class="form-group"><label>포지션 크기</label><input type="text" id="tr-size" placeholder="예: 5% / $500"></div>
       <div class="form-group"><label>보유기간</label><input type="text" id="tr-duration" placeholder="예: 3일"></div>
-      <div class="form-group"><label>청산날짜 <span style="font-size:.65rem;color:var(--tx2);font-weight:300">(선택 — 차트 마커용)</span></label><input type="date" id="tr-exit-date"></div>
+      <div class="form-group"><label>청산날짜 <span style="font-size:.65rem;color:var(--tx2);font-weight:300">(선택)</span></label><input type="date" id="tr-exit-date" onchange="autoSetDay(this.value,'tr-exit-day')"></div>
       <div class="form-group"><label>진입 요일</label>
         <select id="tr-entry-day">
           <option>월요일 아침</option><option>월요일 밤</option><option>화요일 아침</option><option>화요일 밤</option>
@@ -500,9 +501,10 @@
       <strong id="pv-exit" style="color:var(--red)">—</strong>
       <span id="pv-pnl" style="font-weight:600;margin-left:4px">—</span>
     </div>
-    <!-- TradingView 스타일 헤더: 심볼 + 타임프레임 -->
-    <div class="lc-header-bar">
+    <!-- TradingView 스타일 컨트롤 바: 심볼 | 타임프레임 | 드로잉툴 -->
+    <div class="lc-bar">
       <input type="text" id="lc-sym" value="BTCUSDT" placeholder="심볼" class="lc-sym-inp" oninput="lcSymDebounced()">
+      <div class="lc-bar-sep"></div>
       <div class="lc-tf-row">
         <button class="lc-tf" data-iv="1m"  onclick="setLCInterval('1m')">1</button>
         <button class="lc-tf" data-iv="3m"  onclick="setLCInterval('3m')">3</button>
@@ -527,36 +529,35 @@
         <option value="1d" selected>1d</option><option value="3d">3d</option>
         <option value="1w">1w</option><option value="1M">1M</option>
       </select>
-    </div>
-    <!-- 차트 영역: 세로 툴바 + 캔들차트 -->
-    <div class="lc-chart-wrap">
-      <div class="lc-vtoolbar">
-        <button class="lc-vt lc-vt-act" id="lctool-cursor" onclick="setLCTool(null)" title="커서 / 이동">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M3 2l4 11 2-4 4-2L3 2z"/></svg>
+      <div class="lc-bar-sep"></div>
+      <div class="lc-tools-row">
+        <button class="lc-tool lc-tool-act" id="lctool-cursor" onclick="setLCTool(null)" title="이동 (커서)">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M3 2l4 11 2-4.5 4.5-2L3 2z"/></svg>
         </button>
-        <div class="lc-vt-sep"></div>
-        <button class="lc-vt" id="lctool-hline" onclick="setLCTool('hline')" title="수평선">
-          <svg viewBox="0 0 16 16" width="14" height="14"><line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="1" cy="8" r="1.5" fill="currentColor"/><circle cx="15" cy="8" r="1.5" fill="currentColor"/></svg>
+        <div class="lc-tool-sep"></div>
+        <button class="lc-tool" id="lctool-hline" onclick="setLCTool('hline')" title="수평선">
+          <svg viewBox="0 0 16 16" width="13" height="13"><line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="1" cy="8" r="1.5" fill="currentColor"/><circle cx="15" cy="8" r="1.5" fill="currentColor"/></svg>
         </button>
-        <button class="lc-vt" id="lctool-tline" onclick="setLCTool('tline')" title="추세선">
-          <svg viewBox="0 0 16 16" width="14" height="14"><line x1="2" y1="14" x2="14" y2="2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="2" cy="14" r="1.8" fill="currentColor"/><circle cx="14" cy="2" r="1.8" fill="currentColor"/></svg>
+        <button class="lc-tool" id="lctool-tline" onclick="setLCTool('tline')" title="추세선">
+          <svg viewBox="0 0 16 16" width="13" height="13"><line x1="2" y1="14" x2="14" y2="2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="2" cy="14" r="1.8" fill="currentColor"/><circle cx="14" cy="2" r="1.8" fill="currentColor"/></svg>
         </button>
-        <button class="lc-vt" id="lctool-pct" onclick="setLCTool('pct')" title="% 측정">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5" cy="5" r="2.2"/><circle cx="11" cy="11" r="2.2"/><line x1="3" y1="13" x2="13" y2="3"/></svg>
+        <button class="lc-tool" id="lctool-pct" onclick="setLCTool('pct')" title="% 구간 측정">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5" cy="5" r="2"/><circle cx="11" cy="11" r="2"/><line x1="3" y1="13" x2="13" y2="3"/></svg>
         </button>
-        <div class="lc-vt-sep"></div>
-        <button class="lc-vt lc-vt-del" onclick="clearLCDrawings()" title="전체삭제">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M6.5 1.5h3l.5 1.5H6L6.5 1.5zM3 4h10L12 14H4L3 4zm3 2v6h1V6H6zm3 0v6h1V6H9z"/></svg>
+        <div class="lc-tool-sep"></div>
+        <button class="lc-tool lc-tool-del" onclick="clearLCDrawings()" title="전체삭제">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M6 2h4l.5 1.5h3l-.5 1H3l-.5-1h3L6 2zm-2 3h8l-.8 8H4.8L4 5z"/></svg>
         </button>
       </div>
-      <div style="flex:1;position:relative;min-width:0">
-        <div id="lc-loading" style="display:none;padding:12px;color:var(--tx2);font-size:.80rem;text-align:center;position:absolute;top:0;left:0;right:0;z-index:5;background:rgba(0,0,0,.45);border-radius:0 8px 0 0">차트 로딩 중…</div>
-        <div id="lc-container" style="height:420px;border-radius:0 8px 8px 0;overflow:hidden;border:1px solid var(--bd);border-left:none"></div>
-        <div id="lc-pct-tip" class="lc-pct-tip"></div>
-      </div>
     </div>
-    <div style="font-size:.72rem;color:var(--tx2);margin-top:4px;padding:0 2px">
-      💡 진입가·청산가 입력 시 차트에 자동 표시 · 그린 상태 그대로 저장 시 자동 캡처됨
+    <!-- 차트 전폭 -->
+    <div style="position:relative">
+      <div id="lc-loading" style="display:none;padding:12px;color:var(--tx2);font-size:.80rem;text-align:center;position:absolute;top:0;left:0;right:0;z-index:5;background:rgba(0,0,0,.5);border-radius:8px 8px 0 0">차트 로딩 중…</div>
+      <div id="lc-container" style="height:420px;border-radius:8px;overflow:hidden;border:1px solid var(--bd)"></div>
+      <div id="lc-pct-tip" class="lc-pct-tip"></div>
+    </div>
+    <div style="font-size:.71rem;color:var(--tx2);margin-top:4px;padding:0 2px">
+      💡 수평선·추세선·% 측정 클릭 후 차트를 눌러 그리기 · 저장 시 자동 캡처됨
     </div>
 
     <div class="section-label" style="margin-top:10px">스크린샷 추가 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0"> — 클릭·드래그·Ctrl+V</span></div>
@@ -1084,6 +1085,20 @@ let lcChart=null,lcSeries=null,lcEntryLine=null,lcExitLine=null;
 let lcTool=null,lcHLines=[],lcTLines=[],lcPctLines=[],lcDrawStart=null,lcSymTimer=null;
 window.lcSymDebounced=function(){clearTimeout(lcSymTimer);lcSymTimer=setTimeout(()=>initLC(),700);};
 
+/* 날짜 → 요일 자동 계산 */
+const _DNAMES=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+window.autoSetDay=function(dateStr,selectId){
+  if(!dateStr)return;
+  const d=new Date(dateStr+'T12:00:00');
+  if(isNaN(d))return;
+  const dayName=_DNAMES[d.getDay()];
+  const sel=document.getElementById(selectId);
+  if(!sel)return;
+  const suffix=sel.value.includes('밤')?'밤':'아침';
+  const newVal=`${dayName} ${suffix}`;
+  if([...sel.options].some(o=>o.value===newVal))sel.value=newVal;
+};
+
 function ivTVtoLC(tv){return({'D':'1d','W':'1w','240':'4h','120':'12h','60':'1h','30':'30m','15':'15m'})[tv]||'1d';}
 
 async function fetchKlines(sym,iv,limit){
@@ -1107,8 +1122,7 @@ async function initLC(){
   const iv=document.getElementById('lc-int').value||'1d';
   const container=document.getElementById('lc-container');
   if(!container)return;
-  if(lcChart){try{lcChart.remove();}catch(e){}lcChart=null;lcSeries=null;lcEntryLine=null;lcExitLine=null;lcHLines=[];lcTLines=[];}
-  container.removeEventListener('click',lcClickHandler);
+  if(lcChart){try{lcChart.remove();}catch(e){}lcChart=null;lcSeries=null;lcEntryLine=null;lcExitLine=null;lcHLines=[];lcTLines=[];lcPctLines=[];}
   document.getElementById('lc-loading').style.display='block';
   container.innerHTML='';
   try{
@@ -1128,56 +1142,69 @@ async function initLC(){
     lcSeries=lcChart.addCandlestickSeries({upColor:'#4caf7a',downColor:'#cf6679',borderUpColor:'#4caf7a',borderDownColor:'#cf6679',wickUpColor:'#4caf7a',wickDownColor:'#cf6679'});
     lcSeries.setData(candles);
     lcChart.timeScale().fitContent();
-    container.addEventListener('click',lcClickHandler);
+    /* ★ 핵심: DOM click 아닌 LC 공식 subscribeClick API 사용 */
+    lcChart.subscribeClick(lcChartClick);
     updateLCLines();
   }catch(e){container.innerHTML=`<div style="padding:20px;color:var(--tx2);text-align:center;font-size:.82rem">차트 로드 실패: ${e.message}</div>`;}
   document.getElementById('lc-loading').style.display='none';
   setLCTool(null);
 }
 
-function lcClickHandler(ev){
+/* LC 공식 클릭 핸들러 — subscribeClick API로 받은 param 사용 */
+function lcChartClick(param){
   if(!lcTool||!lcChart||!lcSeries)return;
-  const rect=ev.currentTarget.getBoundingClientRect();
-  const price=lcChart.priceScale('right').coordinateToPrice(ev.clientY-rect.top);
-  const time=lcChart.timeScale().coordinateToTime(ev.clientX-rect.left);
-  if(!price||!time)return;
+  if(!param.point)return; // 차트 영역 밖 클릭
+  const price=lcSeries.coordinateToPrice(param.point.y);
+  const time=lcChart.timeScale().coordinateToTime(param.point.x);
+  if(price==null||!time)return;
+
   if(lcTool==='hline'){
-    lcHLines.push(lcSeries.createPriceLine({price,color:'#c9a84c',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Solid,axisLabelVisible:false,title:''}));
+    lcHLines.push(lcSeries.createPriceLine({
+      price,color:'#c9a84c',lineWidth:1,
+      lineStyle:LightweightCharts.LineStyle.Solid,
+      axisLabelVisible:true,title:''
+    }));
+
   }else if(lcTool==='tline'){
-    if(!lcDrawStart){lcDrawStart={price,time};}
-    else{
-      const s=lcChart.addLineSeries({color:'#c9a84c',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Solid,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+    if(!lcDrawStart){
+      lcDrawStart={price,time};
+      /* 시작점 임시 마커 */
+      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#c9a84c88',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:false,title:''});
+    }else{
+      if(lcDrawStart.startPL)try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}
+      const s=lcChart.addLineSeries({color:'#c9a84c',lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Solid,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
       const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
-      if(pts[0].time!==pts[1].time)s.setData(pts);
-      lcTLines.push(s);lcDrawStart=null;
+      if(pts[0].time!==pts[1].time){s.setData(pts);lcTLines.push(s);}
+      else{try{lcChart.removeSeries(s);}catch(e){}}
+      lcDrawStart=null;
     }
+
   }else if(lcTool==='pct'){
     if(!lcDrawStart){
-      lcDrawStart={price,time,cx:ev.clientX-rect.left,cy:ev.clientY-rect.top};
-      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#8888aa',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'●'});
+      lcDrawStart={price,time,px:param.point.x,py:param.point.y};
+      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#8899bb',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'▶'});
     }else{
       const pct=(price-lcDrawStart.price)/lcDrawStart.price*100;
-      const sign=pct>=0?'+':'';const col=pct>=0?'#5ec98a':'#e07888';
-      /* 시작·끝 price line */
+      const sign=pct>=0?'+':'';
+      const col=pct>=0?'#5ec98a':'#e07888';
       const endPL=lcSeries.createPriceLine({price,color:col,lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:`${sign}${pct.toFixed(2)}%`});
-      /* 연결선 */
-      const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
       let lineSeries=null;
+      const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
       if(pts[0].time!==pts[1].time){
-        lineSeries=lcChart.addLineSeries({color:col+'99',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dashed,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        lineSeries=lcChart.addLineSeries({color:col+'aa',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dashed,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
         lineSeries.setData(pts);
       }
       lcPctLines.push({lineSeries,startPL:lcDrawStart.startPL,endPL});
       /* 플로팅 오버레이 */
       const tip=document.getElementById('lc-pct-tip');
       if(tip){
-        const cx=(lcDrawStart.cx+(ev.clientX-rect.left))/2;
-        const cy=(lcDrawStart.cy+(ev.clientY-rect.top))/2;
-        const w=ev.currentTarget.clientWidth;
+        const cx=(lcDrawStart.px+param.point.x)/2;
+        const cy=(lcDrawStart.py+param.point.y)/2;
         const diff=Math.abs(price-lcDrawStart.price);
-        tip.innerHTML=`<span style="color:${col};font-weight:700;font-size:.9rem">${sign}${pct.toFixed(2)}%</span>&nbsp;&nbsp;<span style="color:var(--tx2)">Δ ${fmtN(diff)}</span>`;
-        tip.style.left=Math.min(cx,w-160)+'px';
-        tip.style.top=Math.max(cy-36,4)+'px';
+        tip.innerHTML=`<span style="color:${col};font-weight:700">${sign}${pct.toFixed(2)}%</span>&ensp;<span style="color:rgba(255,255,255,.6);font-size:.72rem">Δ ${fmtN(diff)}</span>`;
+        const container=document.getElementById('lc-container');
+        tip.style.left=Math.min(Math.max(cx-60,4),((container?.clientWidth||600)-150))+'px';
+        tip.style.top=Math.max(cy-32,4)+'px';
         tip.style.display='block';
       }
       lcDrawStart=null;
@@ -1200,7 +1227,7 @@ window.setLCTool=function(tool){
   lcTool=tool;lcDrawStart=null;
   ['cursor','hline','tline','pct'].forEach(t=>{
     const b=document.getElementById(`lctool-${t}`);
-    if(b)b.classList.toggle('lc-vt-act',t===(tool||'cursor'));
+    if(b)b.classList.toggle('lc-tool-act',t===(tool||'cursor'));
   });
   const c=document.getElementById('lc-container');if(c)c.style.cursor=tool?'crosshair':'default';
 };
