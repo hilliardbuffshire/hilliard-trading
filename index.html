@@ -189,6 +189,27 @@
     .tr-expand-autochart img{width:100%!important;max-width:640px!important;height:auto!important;object-fit:contain!important}
     .tr-expand-details{display:flex;gap:14px;flex-wrap:wrap;font-size:.79rem;color:var(--tx2)}
     .tr-expand-details span{white-space:nowrap}
+    /* expand 미디어 (전폭) */
+    .tr-expand-media{background:var(--bg3);border-top:1px solid var(--bd);padding:10px 18px 14px}
+    .tr-expand-media-img img{width:100%;height:auto;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);display:block}
+    .tr-expand-imgs-lg{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+    .tr-expand-imgs-lg img{height:240px;width:auto;max-width:100%;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s}
+    .tr-expand-imgs-lg img:hover{opacity:.82}
+    /* Lightweight Charts UI */
+    .lc-header-bar{display:flex;align-items:center;gap:6px;padding:5px 0;flex-wrap:wrap}
+    .lc-sym-inp{width:90px;font-size:.83rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:4px;border:1px solid var(--bd);background:var(--bg2);color:var(--tx)}
+    .lc-tf-row{display:flex;gap:1px;flex-wrap:wrap}
+    .lc-tf{padding:3px 7px;min-width:24px;font-size:.7rem;font-weight:600;border:none;border-radius:3px;background:transparent;color:var(--tx2);cursor:pointer;letter-spacing:.02em;transition:background .12s,color .12s;text-align:center}
+    .lc-tf:hover{background:var(--bg3);color:var(--tx)}
+    .lc-tf-act{background:var(--ac-dim)!important;color:var(--ac)!important}
+    .lc-chart-wrap{display:flex;position:relative}
+    .lc-vtoolbar{display:flex;flex-direction:column;gap:2px;padding:8px 4px;background:var(--bg3);border:1px solid var(--bd);border-right:none;border-radius:8px 0 0 8px;width:38px;flex-shrink:0;align-items:center}
+    .lc-vt{width:28px;height:28px;border:none;border-radius:4px;background:transparent;color:var(--tx2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s;padding:0;flex-shrink:0}
+    .lc-vt:hover{background:rgba(255,255,255,.07);color:var(--tx)}
+    .lc-vt.lc-vt-act{background:var(--ac-dim);color:var(--ac)}
+    .lc-vt.lc-vt-del:hover{background:rgba(207,102,121,.18);color:#cf6679}
+    .lc-vt-sep{width:20px;height:1px;background:var(--bd);margin:3px 0;flex-shrink:0}
+    .lc-pct-tip{position:absolute;background:rgba(10,10,16,.9);border:1px solid rgba(255,255,255,.13);border-radius:5px;padding:6px 12px;font-size:.78rem;color:#fff;pointer-events:none;white-space:nowrap;z-index:20;display:none;box-shadow:0 2px 10px rgba(0,0,0,.5)}
 
     @media(max-width:900px){
       :root{--sidebar-w:0px}
@@ -479,27 +500,63 @@
       <strong id="pv-exit" style="color:var(--red)">—</strong>
       <span id="pv-pnl" style="font-weight:600;margin-left:4px">—</span>
     </div>
-    <div style="padding:6px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-secondary btn-sm" id="lctool-cursor" onclick="setLCTool(null)">✋ 이동</button>
-      <button class="btn btn-secondary btn-sm" id="lctool-hline" onclick="setLCTool('hline')">— 수평선</button>
-      <button class="btn btn-secondary btn-sm" id="lctool-tline" onclick="setLCTool('tline')">╱ 추세선</button>
-      <button class="btn btn-secondary btn-sm" id="lctool-pct" onclick="setLCTool('pct')">% 측정</button>
-      <button class="btn btn-secondary btn-sm" onclick="clearLCDrawings()">🗑 전체삭제</button>
-      <div style="flex:1"></div>
-      <input type="text" id="lc-sym" value="BTCUSDT" placeholder="심볼" style="width:110px" oninput="lcSymDebounced()">
-      <select id="lc-int" onchange="reloadLC()">
-        <option value="1m">1분</option><option value="3m">3분</option><option value="5m">5분</option>
-        <option value="15m">15분</option><option value="30m">30분</option>
-        <option value="1h">1시간</option><option value="2h">2시간</option><option value="4h">4시간</option>
-        <option value="6h">6시간</option><option value="12h">12시간</option>
-        <option value="1d" selected>1일</option><option value="3d">3일</option>
-        <option value="1w">주봉</option><option value="1M">월봉</option>
+    <!-- TradingView 스타일 헤더: 심볼 + 타임프레임 -->
+    <div class="lc-header-bar">
+      <input type="text" id="lc-sym" value="BTCUSDT" placeholder="심볼" class="lc-sym-inp" oninput="lcSymDebounced()">
+      <div class="lc-tf-row">
+        <button class="lc-tf" data-iv="1m"  onclick="setLCInterval('1m')">1</button>
+        <button class="lc-tf" data-iv="3m"  onclick="setLCInterval('3m')">3</button>
+        <button class="lc-tf" data-iv="5m"  onclick="setLCInterval('5m')">5</button>
+        <button class="lc-tf" data-iv="15m" onclick="setLCInterval('15m')">15</button>
+        <button class="lc-tf" data-iv="30m" onclick="setLCInterval('30m')">30</button>
+        <button class="lc-tf" data-iv="1h"  onclick="setLCInterval('1h')">1H</button>
+        <button class="lc-tf" data-iv="2h"  onclick="setLCInterval('2h')">2H</button>
+        <button class="lc-tf" data-iv="4h"  onclick="setLCInterval('4h')">4H</button>
+        <button class="lc-tf" data-iv="6h"  onclick="setLCInterval('6h')">6H</button>
+        <button class="lc-tf" data-iv="12h" onclick="setLCInterval('12h')">12H</button>
+        <button class="lc-tf lc-tf-act" data-iv="1d"  onclick="setLCInterval('1d')">1D</button>
+        <button class="lc-tf" data-iv="3d"  onclick="setLCInterval('3d')">3D</button>
+        <button class="lc-tf" data-iv="1w"  onclick="setLCInterval('1w')">1W</button>
+        <button class="lc-tf" data-iv="1M"  onclick="setLCInterval('1M')">1M</button>
+      </div>
+      <select id="lc-int" style="display:none">
+        <option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option>
+        <option value="15m">15m</option><option value="30m">30m</option>
+        <option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option>
+        <option value="6h">6h</option><option value="12h">12h</option>
+        <option value="1d" selected>1d</option><option value="3d">3d</option>
+        <option value="1w">1w</option><option value="1M">1M</option>
       </select>
     </div>
-    <div id="lc-loading" style="display:none;padding:12px;color:var(--tx2);font-size:.80rem;text-align:center">차트 로딩 중…</div>
-    <div id="lc-container" style="height:420px;border-radius:8px;overflow:hidden;border:1px solid var(--bd)"></div>
+    <!-- 차트 영역: 세로 툴바 + 캔들차트 -->
+    <div class="lc-chart-wrap">
+      <div class="lc-vtoolbar">
+        <button class="lc-vt lc-vt-act" id="lctool-cursor" onclick="setLCTool(null)" title="커서 / 이동">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M3 2l4 11 2-4 4-2L3 2z"/></svg>
+        </button>
+        <div class="lc-vt-sep"></div>
+        <button class="lc-vt" id="lctool-hline" onclick="setLCTool('hline')" title="수평선">
+          <svg viewBox="0 0 16 16" width="14" height="14"><line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="1" cy="8" r="1.5" fill="currentColor"/><circle cx="15" cy="8" r="1.5" fill="currentColor"/></svg>
+        </button>
+        <button class="lc-vt" id="lctool-tline" onclick="setLCTool('tline')" title="추세선">
+          <svg viewBox="0 0 16 16" width="14" height="14"><line x1="2" y1="14" x2="14" y2="2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="2" cy="14" r="1.8" fill="currentColor"/><circle cx="14" cy="2" r="1.8" fill="currentColor"/></svg>
+        </button>
+        <button class="lc-vt" id="lctool-pct" onclick="setLCTool('pct')" title="% 측정">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5" cy="5" r="2.2"/><circle cx="11" cy="11" r="2.2"/><line x1="3" y1="13" x2="13" y2="3"/></svg>
+        </button>
+        <div class="lc-vt-sep"></div>
+        <button class="lc-vt lc-vt-del" onclick="clearLCDrawings()" title="전체삭제">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M6.5 1.5h3l.5 1.5H6L6.5 1.5zM3 4h10L12 14H4L3 4zm3 2v6h1V6H6zm3 0v6h1V6H9z"/></svg>
+        </button>
+      </div>
+      <div style="flex:1;position:relative;min-width:0">
+        <div id="lc-loading" style="display:none;padding:12px;color:var(--tx2);font-size:.80rem;text-align:center;position:absolute;top:0;left:0;right:0;z-index:5;background:rgba(0,0,0,.45);border-radius:0 8px 0 0">차트 로딩 중…</div>
+        <div id="lc-container" style="height:420px;border-radius:0 8px 8px 0;overflow:hidden;border:1px solid var(--bd);border-left:none"></div>
+        <div id="lc-pct-tip" class="lc-pct-tip"></div>
+      </div>
+    </div>
     <div style="font-size:.72rem;color:var(--tx2);margin-top:4px;padding:0 2px">
-      💡 진입가·청산가 입력 시 차트에 자동 표시 · 수평선·추세선 그린 후 저장 시 자동 캡처됨
+      💡 진입가·청산가 입력 시 차트에 자동 표시 · 그린 상태 그대로 저장 시 자동 캡처됨
     </div>
 
     <div class="section-label" style="margin-top:10px">스크린샷 추가 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0"> — 클릭·드래그·Ctrl+V</span></div>
@@ -841,7 +898,7 @@ window.renderTrades=function(){
       ?`<span class="badge open-status">진행중</span>`
       :`<span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span>`;
     const imgs=(t.images||[]).map(b=>
-      `<img src="${b}" class="tr-lb-img" style="width:200px;height:130px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)">`
+      `<img src="${b}" class="tr-lb-img">`
     ).join('');
     const detailLine=`진입: ${t.entryDay||'—'} · 청산: ${t.exitDay||'—'} · 크기: ${t.size||'—'} · 기간: ${t.duration||'—'}`;
     const chartSrc=t.autoChart||(t.images&&t.images[0])||'';
@@ -865,10 +922,10 @@ window.renderTrades=function(){
       <td colspan="15">
         <div class="tr-expand-inner">
           ${t.memo?`<div class="tr-expand-section"><div class="tr-expand-label">메모</div><div class="tr-expand-memo">${t.memo}</div></div>`:''}
-          ${t.autoChart?`<div class="tr-expand-section" style="min-width:300px;flex:2"><div class="tr-expand-label">차트 캡처</div><div class="tr-expand-imgs tr-expand-autochart"><img src="${t.autoChart}" onclick="openLB('${t.autoChart}')"></div></div>`:''}
-          ${imgs?`<div class="tr-expand-section"><div class="tr-expand-label">스크린샷</div><div class="tr-expand-imgs">${imgs}</div></div>`:''}
           <div class="tr-expand-section"><div class="tr-expand-label">상세</div><div class="tr-expand-details">${detailLine}</div></div>
         </div>
+        ${t.autoChart?`<div class="tr-expand-media"><div class="tr-expand-label" style="margin-bottom:6px">차트 캡처</div><div class="tr-expand-media-img"><img src="${t.autoChart}" onclick="openLB('${t.autoChart}')"></div></div>`:''}
+        ${imgs?`<div class="tr-expand-media"><div class="tr-expand-label" style="margin-bottom:6px">스크린샷</div><div class="tr-expand-imgs-lg">${imgs}</div></div>`:''}
       </td>
     </tr>`;
   }).join('')||`<tr><td colspan="15" class="empty">기록 없음</td></tr>`;
@@ -905,7 +962,8 @@ window.openTradeModal=function(trade=null){
     document.getElementById('tr-exit-day').value=trade.exitDay||'월요일 아침';
     document.getElementById('tr-exit-date').value=trade.exitDate||'';
     document.getElementById('lc-sym').value=trade.lcSymbol||(trade.tvSymbol||'').replace(/^[^:]+:/,'')||trade.symbol||'BTCUSDT';
-    document.getElementById('lc-int').value=trade.lcInterval||ivTVtoLC(trade.tvInterval||'D');
+    const iv=trade.lcInterval||ivTVtoLC(trade.tvInterval||'D');
+    document.getElementById('lc-int').value=iv;syncLCTFBtns(iv);
     savedImgs.tr=[...(trade.images||[])];
     savedImgs.tr.forEach(b=>{const el=document.createElement('div');el.className='img-thumb';el.innerHTML=`<img src="${b}" onclick="openLB('${b}')"><button class="img-thumb-del" onclick="rmSavedImg('tr','${b}',this.closest('.img-thumb'))">✕</button>`;document.getElementById('tr-previews').appendChild(el);});
   }else{
@@ -1095,23 +1153,33 @@ function lcClickHandler(ev){
     }
   }else if(lcTool==='pct'){
     if(!lcDrawStart){
-      lcDrawStart={price,time};
-      /* 시작점 표시 */
-      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#a0a0b0',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'▶ 시작'});
+      lcDrawStart={price,time,cx:ev.clientX-rect.left,cy:ev.clientY-rect.top};
+      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#8888aa',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'●'});
     }else{
-      const pct=((price-lcDrawStart.price)/lcDrawStart.price*100);
-      const sign=pct>=0?'+':'';
-      const col=pct>=0?'#5ec98a':'#e07888';
+      const pct=(price-lcDrawStart.price)/lcDrawStart.price*100;
+      const sign=pct>=0?'+':'';const col=pct>=0?'#5ec98a':'#e07888';
+      /* 시작·끝 price line */
+      const endPL=lcSeries.createPriceLine({price,color:col,lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:`${sign}${pct.toFixed(2)}%`});
       /* 연결선 */
       const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
       let lineSeries=null;
       if(pts[0].time!==pts[1].time){
-        lineSeries=lcChart.addLineSeries({color:col,lineWidth:2,lineStyle:LightweightCharts.LineStyle.Solid,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        lineSeries=lcChart.addLineSeries({color:col+'99',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dashed,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
         lineSeries.setData(pts);
       }
-      /* 끝점 라벨 */
-      const endPL=lcSeries.createPriceLine({price,color:col,lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:`${sign}${pct.toFixed(2)}%`});
       lcPctLines.push({lineSeries,startPL:lcDrawStart.startPL,endPL});
+      /* 플로팅 오버레이 */
+      const tip=document.getElementById('lc-pct-tip');
+      if(tip){
+        const cx=(lcDrawStart.cx+(ev.clientX-rect.left))/2;
+        const cy=(lcDrawStart.cy+(ev.clientY-rect.top))/2;
+        const w=ev.currentTarget.clientWidth;
+        const diff=Math.abs(price-lcDrawStart.price);
+        tip.innerHTML=`<span style="color:${col};font-weight:700;font-size:.9rem">${sign}${pct.toFixed(2)}%</span>&nbsp;&nbsp;<span style="color:var(--tx2)">Δ ${fmtN(diff)}</span>`;
+        tip.style.left=Math.min(cx,w-160)+'px';
+        tip.style.top=Math.max(cy-36,4)+'px';
+        tip.style.display='block';
+      }
       lcDrawStart=null;
     }
   }
@@ -1128,14 +1196,22 @@ function updateLCLines(){
 }
 
 window.setLCTool=function(tool){
-  /* 시작점 임시 마커 제거 */
   if(lcDrawStart?.startPL&&lcSeries){try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}}
   lcTool=tool;lcDrawStart=null;
-  ['cursor','hline','tline','pct'].forEach(t=>{const b=document.getElementById(`lctool-${t}`);if(b){b.style.background='';b.style.borderColor='';}});
-  const b=document.getElementById(`lctool-${tool||'cursor'}`);
-  if(b){b.style.background='var(--ac-dim)';b.style.borderColor='var(--ac)';}
+  ['cursor','hline','tline','pct'].forEach(t=>{
+    const b=document.getElementById(`lctool-${t}`);
+    if(b)b.classList.toggle('lc-vt-act',t===(tool||'cursor'));
+  });
   const c=document.getElementById('lc-container');if(c)c.style.cursor=tool?'crosshair':'default';
 };
+window.setLCInterval=function(iv){
+  document.getElementById('lc-int').value=iv;
+  document.querySelectorAll('.lc-tf').forEach(b=>b.classList.toggle('lc-tf-act',b.dataset.iv===iv));
+  reloadLC();
+};
+function syncLCTFBtns(iv){
+  document.querySelectorAll('.lc-tf').forEach(b=>b.classList.toggle('lc-tf-act',b.dataset.iv===iv));
+}
 
 window.clearLCDrawings=function(){
   if(lcSeries)lcHLines.forEach(pl=>{try{lcSeries.removePriceLine(pl);}catch(e){}});
@@ -1146,6 +1222,7 @@ window.clearLCDrawings=function(){
     if(lcSeries&&endPL)try{lcSeries.removePriceLine(endPL);}catch(e){}
   });
   lcHLines=[];lcTLines=[];lcPctLines=[];lcDrawStart=null;
+  const tip=document.getElementById('lc-pct-tip');if(tip)tip.style.display='none';
 };
 
 window.reloadLC=function(){initLC();};
