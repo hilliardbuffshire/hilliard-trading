@@ -7,7 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-  <script src="https://s3.tradingview.com/tv.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -136,10 +135,6 @@
     .btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(207,102,121,.3)}.btn-danger:hover{background:rgba(207,102,121,.25)}
     .btn-edit{background:var(--ac-dim);color:var(--ac-l);border:1px solid var(--bd)}.btn-edit:hover{border-color:var(--ac)}
 
-    .tv-wrap{background:var(--bg3);border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-top:8px}
-    .tv-controls{padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .tv-controls input,.tv-controls select{background:var(--bg2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:6px 10px;font-family:inherit;font-size:.80rem}
-    .tv-controls input{width:160px}
     .tv-price-badge{display:flex;gap:12px;align-items:center;padding:8px 14px;background:var(--bg3);border:1px solid var(--bd);border-radius:7px;margin-bottom:8px;font-size:.80rem;flex-wrap:wrap}
     .tv-price-badge .pb-dir{padding:2px 9px;border-radius:4px;font-size:.70rem;font-weight:600;margin-right:4px}
 
@@ -540,8 +535,8 @@
     <div class="section-label">메모</div>
     <div class="form-group" style="margin-bottom:14px"><textarea id="tr-memo" rows="2" placeholder="진입 이유, 복기..."></textarea></div>
 
-    <!-- ⑤ 차트 (TradingView) -->
-    <div class="section-label">차트 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0">— TradingView · 모든 드로잉·% 툴 사용 가능</span></div>
+    <!-- ⑤ 차트 (Lightweight Charts) -->
+    <div class="section-label">차트 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0">— 수평선·추세선·% 측정 · 저장 시 현재 차트 캡처</span></div>
     <div class="tv-price-badge" id="tr-price-badge">
       <span id="pv-dir" class="pb-dir" style="background:var(--green-dim);color:var(--green)">롱</span>
       <span style="color:var(--tx2);font-size:.72rem">진입</span>
@@ -1077,7 +1072,7 @@ function updatePriceBadge(){
   if(pnl){pEl.textContent=`${pnl>=0?'+':''}${pnl}%`;pEl.style.color=pnl>=0?'var(--green)':'var(--red)';}
   else{pEl.textContent='—';pEl.style.color='var(--tx2)';}
 }
-/* autoSetTvSymbol defined in TradingView section above */
+/* LC section end */
 window.saveTrade=async function(){
   const date=document.getElementById('tr-date').value,symbol=document.getElementById('tr-symbol').value.trim();
   if(!date||!symbol)return toast('날짜와 종목을 입력하세요','err');
