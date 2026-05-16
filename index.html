@@ -480,13 +480,17 @@
     <div class="tv-wrap">
       <div class="tv-controls">
         <input type="text" id="tv-symbol-tr" value="BINANCE:BTCUSDT" placeholder="심볼">
-        <select id="tv-interval-tr"><option value="D">1일</option><option value="240">4시간</option><option value="60">1시간</option><option value="W">주봉</option></select>
+        <select id="tv-interval-tr"><option value="D">1일</option><option value="W">주봉</option><option value="240">4시간</option><option value="120">12시간</option><option value="60">1시간</option><option value="30">30분</option></select>
         <button class="btn btn-secondary btn-sm" onclick="loadTV('tr')">새로고침</button>
       </div>
-      <div id="tv-container-tr" style="height:360px"></div>
+      <div id="tv-loading-tr" style="display:none;padding:12px;color:var(--tx2);font-size:.80rem;text-align:center">차트 로딩 중…</div>
+      <div id="tv-container-tr" style="height:420px"></div>
+    </div>
+    <div style="font-size:.72rem;color:var(--tx2);margin-top:4px;padding:0 2px">
+      💡 차트에서 왼쪽 툴바로 선·도형 그리기 가능 · 저장 시 차트 내 <strong style="color:var(--ac-l)">📷 카메라 아이콘</strong> 클릭 → 이미지 다운로드 후 아래에 Ctrl+V 붙여넣기
     </div>
 
-    <div class="section-label">스크린샷 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0"> — 클릭·드래그·Ctrl+V</span></div>
+    <div class="section-label" style="margin-top:10px">스크린샷 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0"> — 클릭·드래그·Ctrl+V (TV 차트 포함)</span></div>
     <div class="img-drop" id="tr-drop" onclick="document.getElementById('tr-img-input').click()">
       <input type="file" id="tr-img-input" multiple accept="image/*" onchange="addImages(event,'tr')">
       📎 클릭 또는 드래그 또는 Ctrl+V 붙여넣기
@@ -825,7 +829,7 @@ window.renderTrades=function(){
       ?`<span class="badge open-status">진행중</span>`
       :`<span class="badge ${t.result==='승'?'win':'loss'}">${t.result}</span>`;
     const imgs=(t.images||[]).map(b=>
-      `<img data-src="${b}" class="tr-lb-img" style="width:140px;height:95px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)">`
+      `<img src="${b}" class="tr-lb-img" style="width:200px;height:130px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd)">`
     ).join('');
     const detailLine=`진입: ${t.entryDay||'—'} · 청산: ${t.exitDay||'—'} · 크기: ${t.size||'—'} · 기간: ${t.duration||'—'}`;
     const chartSrc=t.autoChart||(t.images&&t.images[0])||'';
@@ -857,7 +861,7 @@ window.renderTrades=function(){
     </tr>`;
   }).join('')||`<tr><td colspan="15" class="empty">기록 없음</td></tr>`;
   tbody.querySelectorAll('.tr-lb-img').forEach(img=>{
-    img.addEventListener('click',e=>{e.stopPropagation();openLB(img.dataset.src);});
+    img.addEventListener('click',e=>{e.stopPropagation();openLB(img.src);});
   });
 };
 window.toggleTradeExpand=function(id){
@@ -902,7 +906,7 @@ window.openTradeModal=function(trade=null){
   }
   updatePriceBadge();
   document.getElementById('modal-trade').classList.add('open');
-  setTimeout(()=>loadTV('tr'),350);
+  setTimeout(()=>loadTV('tr'),700);
 };
 function calcPnl(){
   const e=+document.getElementById('tr-entry').value,x=+document.getElementById('tr-exit').value;
@@ -1013,6 +1017,7 @@ function ensureTV(cb){
   tvLoading=true;
   const s=document.createElement('script');s.src='https://s3.tradingview.com/tv.js';
   s.onload=()=>{tvLoaded=true;tvLoading=false;tvQueue.forEach(f=>f());tvQueue=[];};
+  s.onerror=()=>{tvLoading=false;tvQueue=[];toast('TradingView 로드 실패. 네트워크를 확인하고 새로고침 버튼을 눌러주세요.','err');};
   document.head.appendChild(s);
 }
 window.loadTV=function(which){
@@ -1023,7 +1028,13 @@ window.loadTV=function(which){
   const c=document.getElementById(cid);if(!c)return;
   c.innerHTML='';
   const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim()||'#13131a';
-  ensureTV(()=>new window.TradingView.widget({container_id:cid,width:'100%',height:isJnl?380:360,symbol:sym,interval:intv,timezone:'Asia/Seoul',theme:'dark',style:'1',locale:'kr',toolbar_bg:bg,enable_publishing:false,save_image:false,hide_top_toolbar:false}));
+  const loader=document.getElementById(`tv-loading-${which}`);
+  if(loader)loader.style.display='block';
+  ensureTV(()=>{
+    if(loader)loader.style.display='none';
+    try{new window.TradingView.widget({container_id:cid,width:'100%',height:isJnl?400:420,symbol:sym,interval:intv,timezone:'Asia/Seoul',theme:'dark',style:'1',locale:'kr',toolbar_bg:bg||'#14141d',enable_publishing:false,save_image:true,hide_top_toolbar:false,allow_symbol_change:true,withdateranges:true,drawings_access:{type:'all'}});}
+    catch(e){if(loader)loader.style.display='none';console.warn('TV widget error:',e);}
+  });
 };
 
 /* ── Charts ── */
@@ -1216,7 +1227,7 @@ async function genAutoChart(tvSym,tvInt,tradeDate,exitDate,entryP,exitP,dir){
   const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim()||'#14141d';
   ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-  const ivMap={'D':'1d','240':'4h','60':'1h','W':'1w','30':'30m','15':'15m'};
+  const ivMap={'D':'1d','240':'4h','120':'12h','60':'1h','W':'1w','30':'30m','15':'15m'};
   const iv=ivMap[tvInt]||'1d';
   let closes=[],dates=[];
   try{
@@ -1285,14 +1296,16 @@ window.handleImportFile=async function(ev){
 function parseExcelFile(file){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
+    const isCsv=file.name.toLowerCase().endsWith('.csv');
     reader.onload=e=>{
       try{
-        const wb=XLSX.read(e.target.result,{type:'binary',cellDates:true});
+        const wb=XLSX.read(e.target.result,{type:isCsv?'string':'binary',cellDates:!isCsv});
         const ws=wb.Sheets[wb.SheetNames[0]];
-        resolve(XLSX.utils.sheet_to_json(ws,{raw:false,dateNF:'YYYY-MM-DD'}));
+        resolve(XLSX.utils.sheet_to_json(ws,{raw:false,dateNF:'YYYY-MM-DD',defval:''}));
       }catch(err){reject(err);}
     };
-    reader.onerror=reject;reader.readAsBinaryString(file);
+    reader.onerror=reject;
+    if(isCsv)reader.readAsText(file,'UTF-8');else reader.readAsBinaryString(file);
   });
 }
 
@@ -1375,7 +1388,17 @@ window.undoImport=async function(){
 };
 
 /* Import drag-drop */
-(()=>{const z=document.getElementById('imp-drop');if(!z)return;z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag');});z.addEventListener('dragleave',()=>z.classList.remove('drag'));z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('drag');const f=e.dataTransfer.files[0];if(f){const inp=document.getElementById('imp-file-input');const dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;handleImportFile({target:{files:[f]}});}});})();
+(()=>{
+  const z=document.getElementById('imp-drop');if(!z)return;
+  z.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();z.classList.add('drag');});
+  z.addEventListener('dragenter',e=>{e.preventDefault();z.classList.add('drag');});
+  z.addEventListener('dragleave',e=>{if(!z.contains(e.relatedTarget))z.classList.remove('drag');});
+  z.addEventListener('drop',e=>{
+    e.preventDefault();e.stopPropagation();z.classList.remove('drag');
+    const files=e.dataTransfer?.files;
+    if(files&&files.length>0)window.handleImportFile({target:{files}});
+  });
+})();
 </script>
 </body>
 </html>
