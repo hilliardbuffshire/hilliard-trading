@@ -194,13 +194,16 @@
     .jnl-auto-cell{background:rgba(212,170,80,.05)!important;border-bottom:1px dotted rgba(212,170,80,.35)!important}
     .jnl-auto-cell:hover{background:var(--ac-dim)!important}
     #jnl-sheet th .jnl-auto-badge{font-size:.52rem;color:var(--ac);vertical-align:super;margin-left:1px;opacity:.8}
+    #jnl-sheet th[draggable]{cursor:grab;user-select:none}
+    #jnl-sheet th[draggable]:active{cursor:grabbing}
     /* Monthly panel */
     .jnl-monthly-panel{margin-bottom:18px}
     .jnl-mpanel-hdr{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:6px 0;margin-bottom:4px}
     .jnl-mpanel-hdr h3{font-size:.82rem;font-weight:500;color:var(--tx2)}
     .jnl-mpanel-hdr:hover h3{color:var(--tx)}
     .jnl-mpanel-arrow{font-size:.65rem;color:var(--tx2);width:14px}
-    .jnl-month-cards{display:flex;gap:10px;flex-wrap:wrap;padding:2px 0 8px}
+    .jnl-month-cards{display:flex;gap:10px;flex-wrap:wrap;padding:0;overflow:hidden;max-height:0;transition:max-height .3s ease,padding .3s ease}
+    .jnl-month-cards.open{max-height:1200px;padding:2px 0 8px}
     .jnl-month-card{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:12px 16px;min-width:150px}
     .jnl-month-card h4{font-size:.72rem;color:var(--tx2);margin-bottom:8px;font-weight:400;text-transform:uppercase;letter-spacing:.04em}
     .jnl-mrow{display:flex;justify-content:space-between;gap:12px;font-size:.74rem;margin-bottom:3px;color:var(--tx2)}
@@ -422,7 +425,7 @@
           <span class="jnl-mpanel-arrow" id="jnl-panel-arrow">▶</span>
           <h3>월별 정산 요약</h3>
         </div>
-        <div id="jnl-month-cards" class="jnl-month-cards" style="display:none"></div>
+        <div id="jnl-month-cards" class="jnl-month-cards"></div>
       </div>
       <!-- Spreadsheet table -->
       <div class="table-card" style="overflow:visible">
@@ -916,18 +919,21 @@ function saveCustomCols(c){localStorage.setItem('hb_jnl_custom_cols',JSON.string
 const JNL_COLS=[
   // Exchange open → close (Col B/C, D/E, F/G) — open is auto carry-forward
   {key:'upbitOpen',     label:'업비트시작',  fmt:'krw', autoFill:true,
+    autoFillDesc:'전일 업비트 마감값 자동이월',
     get:e=>e.exchanges?.upbit?.open,
     upd:v=>({'exchanges.upbit.open':+v||0})},
   {key:'upbit',         label:'업비트마감',  fmt:'krw',
     get:e=>e.exchanges?.upbit?.close,
     upd:v=>({'exchanges.upbit.close':+v||0})},
   {key:'bithumbOpen',   label:'빗썸시작',    fmt:'krw', autoFill:true,
+    autoFillDesc:'전일 빗썸 마감값 자동이월',
     get:e=>e.exchanges?.bithumb?.open,
     upd:v=>({'exchanges.bithumb.open':+v||0})},
   {key:'bithumb',       label:'빗썸마감',    fmt:'krw',
     get:e=>e.exchanges?.bithumb?.close,
     upd:v=>({'exchanges.bithumb.close':+v||0})},
   {key:'binanceOpen',   label:'퓨쳐스시작',  fmt:'usd', autoFill:true,
+    autoFillDesc:'전일 퓨쳐스 마감값 자동이월',
     get:e=>e.exchanges?.binance?.open,
     upd:v=>({'exchanges.binance.open':+v||0})},
   {key:'binance',       label:'퓨쳐스마감',  fmt:'usd',
@@ -935,9 +941,11 @@ const JNL_COLS=[
     upd:v=>({'exchanges.binance.close':+v||0})},
   // Seed (Col H, I, M) — seedStart & tether are auto-filled
   {key:'seedStart',     label:'시드시작($)', fmt:'usd', autoFill:true,
+    autoFillDesc:'전일 총시드 자동이월',
     get:e=>e.seedStart,
     upd:v=>({seedStart:+v||0})},
   {key:'tether',        label:'테더(₩/$)',  fmt:'rate', autoFill:true,
+    autoFillDesc:'Upbit USDT-KRW 일봉 시가 자동조회',
     get:e=>e.tether,
     upd:v=>({tether:+v||0})},
   {key:'totalSeed',     label:'총시드($)',   fmt:'usd',
@@ -945,7 +953,7 @@ const JNL_COLS=[
     upd:v=>({totalSeed:+v||0})},
   {key:'krwSeed',       label:'원화시드(₩)', fmt:'krw', readonly:true,
     computed:e=>{const s=+e.totalSeed||0,t=+e.tether||0;return s&&t?Math.round(s*t):null;}},
-  // P&L (Col J, K, N, O, P, Q)
+  // P&L (Col J, K, N, O, P)
   {key:'profit',        label:'수익금($)',   fmt:'pnl',
     get:e=>e.profit,
     upd:v=>({profit:+v||0})},
@@ -958,13 +966,10 @@ const JNL_COLS=[
   {key:'personalCumPnl',label:'개인누적',    fmt:'pnl',
     get:e=>e.personalCumPnl,
     upd:v=>({personalCumPnl:+v||0})},
-  {key:'stopAlert',     label:'손절알림',    fmt:'txt',
+  {key:'stopAlert',     label:'강제종료',    fmt:'txt',
     get:e=>e.stopAlert,
     upd:v=>({stopAlert:v})},
-  {key:'reason',        label:'사유',        fmt:'txt',
-    get:e=>e.reason,
-    upd:v=>({reason:v})},
-  {key:'memo',          label:'비고',        fmt:'txt',
+  {key:'memo',          label:'비고/사유',   fmt:'txt',
     get:e=>e.memo,
     upd:v=>({memo:v})},
 ];
@@ -1011,7 +1016,7 @@ function rateHeatBg(val){
 
 window.renderJournal=function(){
   const customCols=getCustomCols();
-  const allCols=[
+  const allCols=getOrderedCols([
     ...JNL_COLS,
     ...customCols.map(c=>({
       key:'cd_'+c.id, label:c.label, fmt:c.fmt==='num'?'usd':'txt',
@@ -1019,7 +1024,7 @@ window.renderJournal=function(){
       get:e=>e.customData?.[c.id],
       upd:v=>({[`customData.${c.id}`]:c.fmt==='num'?+v||0:v}),
     }))
-  ];
+  ]);
 
   // Dynamic thead
   const thead=document.getElementById('jnl-sheet-head');
@@ -1027,10 +1032,12 @@ window.renderJournal=function(){
     <th class="jnl-n">#</th>
     <th class="jnl-sort-th" onclick="jnlSortToggle()" title="클릭으로 정렬 전환">날짜 ${jnlSortAsc?'↑':'↓'}</th>
     ${allCols.map(c=>{
-      if(c.readonly)return`<th style="color:var(--tx2);font-style:italic">${c.label}</th>`;
-      if(c.isCustom)return`<th>${c.label}<button class="jnl-col-del" onclick="delJnlCol('${c.customId}')" title="열 삭제">✕</button></th>`;
-      const autoBadge=c.autoFill?`<span class="jnl-auto-badge" title="자동입력">⚡</span>`:'';
-      return`<th>${c.label}${autoBadge}</th>`;
+      if(c.readonly)return`<th style="color:var(--tx2);font-style:italic" data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}</th>`;
+      if(c.isCustom)return`<th data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}<button class="jnl-col-del" onclick="delJnlCol('${c.customId}')" title="열 삭제">✕</button></th>`;
+      const autoDesc=c.autoFillDesc||'자동입력';
+      const autoBadge=c.autoFill?`<span class="jnl-auto-badge" title="${autoDesc}">⚡</span>`:'';
+      const thTitle=c.autoFill?` title="${autoDesc}"`:'' ;
+      return`<th${thTitle} data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}${autoBadge}</th>`;
     }).join('')}
     <th></th>
   </tr>`;
@@ -1216,7 +1223,7 @@ window.addJnlRow=async function(){
     },
     seedStart:prev?.totalSeed||0,
     totalSeed:0,profit:0,rate:0,tether,
-    personalPnl:0,personalCumPnl:0,stopAlert:'',reason:'',memo:'',
+    personalPnl:0,personalCumPnl:0,stopAlert:'',memo:'',
     userId:getCurUid(),createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   try{
@@ -1256,12 +1263,54 @@ function renderJnlMonthlySummary(){
 window.toggleJnlPanel=function(){
   const el=document.getElementById('jnl-month-cards'),arrow=document.getElementById('jnl-panel-arrow');
   if(!el)return;
-  const show=el.style.display==='none';
-  el.style.display=show?'flex':'none';
-  if(arrow)arrow.textContent=show?'▼':'▶';
+  el.classList.toggle('open');
+  if(arrow)arrow.textContent=el.classList.contains('open')?'▼':'▶';
 };
 
 window.jnlSortToggle=function(){jnlSortAsc=!jnlSortAsc;renderJournal();};
+
+/* Column drag-to-reorder */
+function getColOrder(){try{const s=localStorage.getItem('hb_jnl_col_order');return s?JSON.parse(s):null;}catch{return null;}}
+function saveColOrder(keys){localStorage.setItem('hb_jnl_col_order',JSON.stringify(keys));}
+function getOrderedCols(cols){
+  const order=getColOrder();
+  if(!order?.length)return cols;
+  const map=Object.fromEntries(cols.map(c=>[c.key,c]));
+  const out=order.map(k=>map[k]).filter(Boolean);
+  cols.forEach(c=>{if(!order.includes(c.key))out.push(c);});
+  return out;
+}
+let _jnlDragKey=null;
+window.jnlColDragStart=function(e){
+  _jnlDragKey=e.currentTarget.dataset.colKey;
+  e.currentTarget.style.opacity='.45';
+  e.dataTransfer.effectAllowed='move';
+};
+window.jnlColDragOver=function(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('#jnl-sheet-head th').forEach(th=>th.style.outline='');
+  e.currentTarget.style.outline='2px solid var(--ac)';
+};
+window.jnlColDragEnd=function(e){
+  e.currentTarget.style.opacity='';
+  document.querySelectorAll('#jnl-sheet-head th').forEach(th=>{th.style.outline='';th.style.opacity='';});
+  _jnlDragKey=null;
+};
+window.jnlColDrop=function(e){
+  e.preventDefault();
+  const toKey=e.currentTarget.dataset.colKey;
+  if(!_jnlDragKey||!toKey||_jnlDragKey===toKey)return;
+  const customCols=getCustomCols();
+  const all=[...JNL_COLS,...customCols.map(c=>({key:'cd_'+c.id}))];
+  const ordered=getOrderedCols(all);
+  const keys=ordered.map(c=>c.key);
+  const from=keys.indexOf(_jnlDragKey),to=keys.indexOf(toKey);
+  if(from===-1||to===-1)return;
+  keys.splice(to,0,keys.splice(from,1)[0]);
+  saveColOrder(keys);
+  renderJournal();
+};
 
 /* Upbit USDT-KRW open price for a given date */
 async function fetchTetherRate(date){
@@ -1270,9 +1319,8 @@ async function fetchTetherRate(date){
     const r=await fetch(`https://api.upbit.com/v1/candles/days?market=USDT-KRW&count=1&to=${to}`);
     if(!r.ok)return null;
     const d=await r.json();
-    // Verify the candle date matches
-    const candleDate=d[0]?.candle_date_time_kst?.slice(0,10);
-    return candleDate===date?(d[0].opening_price||d[0].trade_price):null;
+    if(!d?.length)return null;
+    return d[0].opening_price||d[0].trade_price||null;
   }catch{return null;}
 }
 
@@ -1318,9 +1366,8 @@ window.exportJournalXLSX=function(){
       '수익률(%)':+e.rate||'',
       '개인손익':+e.personalPnl||'',
       '개인누적':+e.personalCumPnl||'',
-      '손절알림':e.stopAlert||'',
-      '사유':e.reason||'',
-      '비고':e.memo||'',
+      '강제종료':e.stopAlert||'',
+      '비고/사유':e.memo||'',
     };
     customCols.forEach(c=>{row[c.label]=e.customData?.[c.id]??'';});
     return row;
