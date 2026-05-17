@@ -120,23 +120,6 @@
     .form-group input[readonly]{background:rgba(128,128,128,.08);color:var(--tx2);cursor:default;border-style:dashed}
     .auto-badge{display:inline-block;font-size:.58rem;background:var(--ac-dim);color:var(--ac-l);padding:1px 5px;border-radius:3px;margin-left:5px;text-transform:none;letter-spacing:0;font-weight:400;vertical-align:middle}
 
-    .exch-toggles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-    .exch-toggle{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:20px;border:1px solid var(--bd);font-size:.75rem;cursor:pointer;color:var(--tx2);background:var(--bg3);transition:all .15s;user-select:none}
-    .exch-toggle:hover{border-color:var(--ac);color:var(--tx)}
-    .exch-toggle.active{background:var(--ac-dim);border-color:var(--ac);color:var(--ac-l)}
-    .exch-toggle.add-btn{border-style:dashed}
-    .exch-del{font-size:.6rem;opacity:0;color:var(--red);transition:opacity .1s;margin-left:1px;line-height:1;padding:0 1px}
-    .exch-toggle:hover .exch-del{opacity:.9}
-    .exch-add-row{display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;padding:10px 12px;background:var(--bg3);border:1px solid var(--bd);border-radius:8px}
-    .exch-add-row input,.exch-add-row select{background:var(--bg2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 10px;font-family:inherit;font-size:.80rem}
-    .exch-add-row input{width:140px}
-
-    .exch-section-title{font-size:.72rem;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px}
-    .exch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin-bottom:6px}
-    .exch-row{background:var(--bg3);border:1px solid var(--bd);border-radius:7px;padding:10px 14px;display:grid;grid-template-columns:90px 1fr 1fr;gap:8px;align-items:center}
-    .exch-name{font-size:.78rem;font-weight:500;color:var(--tx2)}
-    .exch-row input{background:var(--bg2);border:1px solid var(--bd);border-radius:5px;color:var(--tx);padding:5px 9px;font-size:.80rem;width:100%;text-align:right}
-    .exch-row input:focus{outline:none;border-color:var(--ac)}
 
     .btn{padding:8px 18px;border-radius:7px;border:none;cursor:pointer;font-family:inherit;font-size:.83rem;font-weight:500;transition:all .15s}
     .btn-primary{background:var(--ac);color:var(--bg)}.btn-primary:hover{background:var(--ac-l)}
@@ -484,43 +467,6 @@
 </div>
 
 <!-- Journal Modal -->
-<div class="modal-overlay" id="modal-journal">
-  <div class="modal">
-    <div class="modal-hdr"><h3 id="jnl-modal-title">📋 매매일지 기록</h3><button class="modal-close" onclick="closeModal('modal-journal')">✕</button></div>
-    <div class="form-grid" style="margin-bottom:12px">
-      <div class="form-group"><label>날짜</label><input type="date" id="jnl-date"></div>
-      <div class="form-group"><label>출금내역</label><input type="text" id="jnl-withdrawal" placeholder="예: 빙엑스 $2,000 출금"></div>
-    </div>
-    <div class="section-label" style="margin-top:0">거래소 선택 <span style="font-weight:300;font-size:.65rem;color:var(--tx2);text-transform:none;letter-spacing:0"> — 클릭 활성/비활성 · ×로 삭제</span></div>
-    <div class="exch-toggles" id="exch-toggles"></div>
-    <div class="exch-add-row" id="exch-add-row">
-      <input type="text" id="new-exch-name" placeholder="거래소 이름" maxlength="14">
-      <select id="new-exch-cur"><option value="USD">USD</option><option value="KRW">KRW</option></select>
-      <button class="btn btn-primary btn-sm" onclick="confirmAddExch()">추가</button>
-      <button class="btn btn-secondary btn-sm" onclick="hideAddExch()">취소</button>
-    </div>
-    <div id="exch-krw-wrap"><div class="exch-section-title">KRW 계좌</div><div class="exch-grid" id="exch-krw"></div></div>
-    <div id="exch-usd-wrap"><div class="exch-section-title">USD 계좌</div><div class="exch-grid" id="exch-usd"></div></div>
-    <div class="form-grid" style="margin:12px 0">
-      <div class="form-group"><label>USD 총 시드 <span class="auto-badge">자동</span></label><input type="text" id="jnl-total" readonly></div>
-      <div class="form-group"><label>USD 수익금 <span class="auto-badge">자동</span></label><input type="text" id="jnl-profit" readonly></div>
-      <div class="form-group"><label>수익률 <span class="auto-badge">자동</span></label><input type="text" id="jnl-rate" readonly></div>
-    </div>
-    <div class="section-label">차트 스크린샷 <span style="font-weight:300;font-size:.65rem;text-transform:none;letter-spacing:0"> — 클릭·드래그·붙여넣기(Ctrl+V)</span></div>
-    <div class="img-drop" id="jnl-drop" onclick="document.getElementById('jnl-img-input').click()">
-      <input type="file" id="jnl-img-input" multiple accept="image/*" onchange="addImages(event,'jnl')">
-      📎 클릭 또는 드래그 또는 Ctrl+V 붙여넣기
-    </div>
-    <div class="img-previews" id="jnl-previews"></div>
-    <div class="section-label">메모</div>
-    <div class="form-group"><textarea id="jnl-memo" rows="3" placeholder="오늘 장 복기, 특이사항..."></textarea></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('modal-journal')">취소</button>
-      <button class="btn btn-primary" id="jnl-save-btn" onclick="saveJournal()">저장</button>
-    </div>
-  </div>
-</div>
-
 <!-- Trade Modal -->
 <div class="modal-overlay" id="modal-trade">
   <div class="modal modal-wide">
@@ -722,22 +668,12 @@ firebase.apps.length||firebase.initializeApp(FB);
 const db=firebase.firestore(), auth=firebase.auth();
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 
-const DEF_LIST=[
-  {id:'upbit',    name:'업비트',   cur:'KRW',group:'krw'},
-  {id:'bithumb',  name:'빗썸',     cur:'KRW',group:'krw'},
-  {id:'binance',  name:'바이낸스', cur:'USD',group:'usd'},
-  {id:'core',     name:'Core',     cur:'USD',group:'usd'},
-  {id:'mexc',     name:'MEXC',     cur:'USD',group:'usd'},
-  {id:'coinbase', name:'코인베이스',cur:'USD',group:'usd'},
-  {id:'robinhood',name:'로빈후드', cur:'USD',group:'usd'},
-];
-const DEF_ACTIVE=['upbit','bithumb','binance'];
 const DAYS=['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
 
 let trades=[],journal=[];
-const pend={jnl:[],tr:[]};
-const savedImgs={jnl:[],tr:[]};
-let editJnlId=null,editTradeId=null;
+const pend={tr:[]};
+const savedImgs={tr:[]};
+let editTradeId=null;
 const CH={};
 
 /* ── Theme ── */
@@ -829,10 +765,7 @@ document.getElementById('logout-btn').addEventListener('click',()=>auth.signOut(
 async function boot(){
   if(!localStorage.getItem('hb_users')||!JSON.parse(localStorage.getItem('hb_users'))[0]?.id)saveUsers(DEF_USERS);
   renderUserSwitcher();updateBrandName();
-  buildExchToggles();buildExchInputs();
-  document.getElementById('jnl-date').value=today();
   document.getElementById('tr-date').value=today();
-  document.getElementById('jnl-filter-month').value=today().slice(0,7);
   await Promise.all([fetchTrades(),fetchJournal()]);
   renderDashboard();
 }
@@ -847,67 +780,6 @@ window.goTo=function(v){
   if(v==='ai')          renderAIView();
 };
 
-/* ── Exchange management ── */
-function getExchList()  {try{return JSON.parse(localStorage.getItem('hb_exch_list'))||DEF_LIST;}catch{return DEF_LIST;}}
-function getActiveExchs(){try{return JSON.parse(localStorage.getItem('hb_exchs'))||DEF_ACTIVE;}catch{return DEF_ACTIVE;}}
-function saveExchs(l,a){localStorage.setItem('hb_exch_list',JSON.stringify(l));localStorage.setItem('hb_exchs',JSON.stringify(a));}
-function buildExchToggles(){
-  const list=getExchList(),active=getActiveExchs();
-  document.getElementById('exch-toggles').innerHTML=
-    list.map(e=>`<span class="exch-toggle${active.includes(e.id)?' active':''}" onclick="toggleExch('${e.id}')">${e.name}<span class="exch-del" onclick="event.stopPropagation();delExch('${e.id}')">✕</span></span>`).join('')+
-    `<span class="exch-toggle add-btn" onclick="showAddExch()">＋ 추가</span>`;
-}
-window.toggleExch=function(id){let a=getActiveExchs();if(a.includes(id)){if(a.length<=1)return;a=a.filter(x=>x!==id);}else a.push(id);localStorage.setItem('hb_exchs',JSON.stringify(a));buildExchToggles();buildExchInputs();calcJnlTotals();};
-window.delExch=function(id){if(!confirm('삭제?'))return;let l=getExchList().filter(e=>e.id!==id);let a=getActiveExchs().filter(x=>x!==id);if(!a.length&&l.length)a=[l[0].id];saveExchs(l,a);buildExchToggles();buildExchInputs();calcJnlTotals();};
-window.showAddExch=function(){document.getElementById('exch-add-row').style.display='flex';document.getElementById('new-exch-name').focus();};
-window.hideAddExch=function(){document.getElementById('exch-add-row').style.display='none';document.getElementById('new-exch-name').value='';};
-window.confirmAddExch=function(){
-  const name=document.getElementById('new-exch-name').value.trim();if(!name)return;
-  const cur=document.getElementById('new-exch-cur').value;
-  const id=name.toLowerCase().replace(/[^a-z0-9]/g,'_')+'_'+Date.now();
-  const l=getExchList(),a=getActiveExchs();l.push({id,name,cur,group:cur==='KRW'?'krw':'usd'});a.push(id);
-  saveExchs(l,a);hideAddExch();buildExchToggles();buildExchInputs();calcJnlTotals();
-};
-document.getElementById('new-exch-name').addEventListener('keydown',e=>e.key==='Enter'&&confirmAddExch());
-
-function buildExchInputs(){
-  const list=getExchList(),active=getActiveExchs(),exchs=list.filter(e=>active.includes(e.id));
-  ['krw','usd'].forEach(g=>{
-    const rows=exchs.filter(e=>e.group===g);
-    document.getElementById(`exch-${g}-wrap`).style.display=rows.length?'':'none';
-    document.getElementById(`exch-${g}`).innerHTML=rows.map(e=>{
-      const isK=e.group==='krw';
-      const inp=isK
-        ?`<input type="text" inputmode="numeric" id="ex-o-${e.id}" placeholder="시작(KRW)" oninput="fmtKrw(this);calcJnlTotals()">
-           <input type="text" inputmode="numeric" id="ex-c-${e.id}" placeholder="마감(KRW)" oninput="fmtKrw(this);calcJnlTotals()">`
-        :`<input type="number" id="ex-o-${e.id}" placeholder="시작(USD)" oninput="calcJnlTotals()" step="any">
-          <input type="number" id="ex-c-${e.id}" placeholder="마감(USD)" oninput="calcJnlTotals()" step="any">`;
-      return`<div class="exch-row"><div class="exch-name">${e.name}</div>${inp}</div>`;
-    }).join('');
-  });
-}
-/* KRW comma formatting */
-window.fmtKrw=function(el){
-  const raw=el.value.replace(/[^0-9]/g,'');
-  el.dataset.raw=raw;
-  el.value=raw?(+raw).toLocaleString('ko-KR'):'';
-};
-function parseInput(el){
-  if(!el)return 0;
-  return +(el.value.replace(/[^0-9.]/g,''))||0;
-}
-window.calcJnlTotals=function(){
-  const list=getExchList(),active=getActiveExchs();
-  let open=0,close=0;
-  list.filter(e=>e.group==='usd'&&active.includes(e.id)).forEach(e=>{
-    open +=parseInput(document.getElementById(`ex-o-${e.id}`));
-    close+=parseInput(document.getElementById(`ex-c-${e.id}`));
-  });
-  const profit=close-open,rate=open?(profit/open*100).toFixed(2):'—';
-  document.getElementById('jnl-total').value =close  ?`$${fmtN(close)}`:'';
-  document.getElementById('jnl-profit').value=profit?`${profit>=0?'+':''}$${fmtN(profit)}`:'';
-  document.getElementById('jnl-rate').value  =open   ?`${rate}%`:'';
-};
 
 /* ── Firestore ── */
 async function fetchTrades(){
@@ -1162,63 +1034,6 @@ window.toggleJnlPanel=function(){
   const show=el.style.display==='none';
   el.style.display=show?'flex':'none';
   if(arrow)arrow.textContent=show?'▼':'▶';
-};
-window.openJournalModal=function(entry=null){
-  editJnlId=entry?entry.id:null;
-  pend.jnl=[];savedImgs.jnl=[];
-  document.getElementById('jnl-previews').innerHTML='';
-  hideAddExch();buildExchToggles();buildExchInputs();
-  if(entry){
-    document.getElementById('jnl-modal-title').textContent='📋 매매일지 편집';
-    document.getElementById('jnl-date').value=entry.date||'';
-    document.getElementById('jnl-withdrawal').value=entry.withdrawal||'';
-    document.getElementById('jnl-memo').value=entry.memo||'';
-    const list=getExchList(),active=getActiveExchs();
-    list.filter(e=>active.includes(e.id)).forEach(e=>{
-      const d=entry.exchanges?.[e.id];if(!d)return;
-      const oEl=document.getElementById(`ex-o-${e.id}`),cEl=document.getElementById(`ex-c-${e.id}`);
-      if(e.group==='krw'){
-        if(oEl){oEl.value=d.open?(+d.open).toLocaleString('ko-KR'):'';oEl.dataset.raw=d.open||'';}
-        if(cEl){cEl.value=d.close?(+d.close).toLocaleString('ko-KR'):'';cEl.dataset.raw=d.close||'';}
-      }else{
-        if(oEl)oEl.value=d.open||'';if(cEl)cEl.value=d.close||'';
-      }
-    });
-    calcJnlTotals();
-    savedImgs.jnl=[...(entry.images||[])];
-    savedImgs.jnl.forEach(b=>{const el=document.createElement('div');el.className='img-thumb';el.innerHTML=`<img src="${b}" onclick="openLB('${b}')"><button class="img-thumb-del" onclick="rmSavedImg('jnl','${b}',this.closest('.img-thumb'))">✕</button>`;document.getElementById('jnl-previews').appendChild(el);});
-  }else{
-    document.getElementById('jnl-modal-title').textContent='📋 매매일지 기록';
-    document.getElementById('jnl-date').value=today();
-    ['jnl-memo','jnl-withdrawal','jnl-total','jnl-profit','jnl-rate'].forEach(id=>document.getElementById(id).value='');
-  }
-  document.getElementById('modal-journal').classList.add('open');
-};
-window.saveJournal=async function(){
-  const date=document.getElementById('jnl-date').value;
-  if(!date)return toast('날짜를 선택하세요','err');
-  setSaving('jnl-save-btn',true);
-  try{
-    const list=getExchList(),active=getActiveExchs();
-    const exchanges={};let usdO=0,usdC=0;
-    list.filter(e=>active.includes(e.id)).forEach(e=>{
-      const o=parseInput(document.getElementById(`ex-o-${e.id}`)),c=parseInput(document.getElementById(`ex-c-${e.id}`));
-      exchanges[e.id]={open:o,close:c};
-      if(e.group==='usd'){usdO+=o;usdC+=c;}
-    });
-    const profit=+(usdC-usdO).toFixed(2),rate=usdO?+(profit/usdO*100).toFixed(2):0;
-    const newImgs=await compressImages(pend.jnl);
-    const images=[...savedImgs.jnl,...newImgs];
-    const data={date,exchanges,totalSeed:+usdC.toFixed(2),profit,rate,
-      withdrawal:document.getElementById('jnl-withdrawal').value,
-      memo:document.getElementById('jnl-memo').value,images,userId:getCurUid()};
-    if(JSON.stringify(data).length>950000){toast('이미지 용량 초과. 이미지를 줄여주세요.','err');return;}
-    if(editJnlId){await db.collection('trading_journal').doc(editJnlId).update(data);}
-    else{data.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('trading_journal').add(data);}
-    await fetchJournal();renderJournal();closeModal('modal-journal');
-    toast(editJnlId?'수정됨':'저장됨','ok');editJnlId=null;
-  }catch(e){console.error(e);toast('저장 실패: '+(e.message||'오류'),'err');}
-  finally{setSaving('jnl-save-btn',false);}
 };
 
 /* ── Trades ── */
