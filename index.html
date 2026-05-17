@@ -173,7 +173,11 @@
     #jnl-sheet td.jnl-n{padding:6px 8px;color:var(--tx2);font-size:.68rem;text-align:right;min-width:30px;white-space:nowrap}
     .jnl-cell-view{padding:6px 10px;min-height:30px;display:block;cursor:pointer;white-space:nowrap;overflow:hidden;max-width:180px;text-overflow:ellipsis}
     .jnl-cell-view:hover{background:var(--ac-dim)}
-    .jnl-cell-input{width:100%;min-width:90px;padding:6px 10px;background:rgba(212,170,80,.12);border:none;border-bottom:2px solid var(--ac);color:var(--tx);font-family:inherit;font-size:.78rem;outline:none}
+    /* cell input: absolute overlay — no layout jump */
+    .jnl-cell-input{position:absolute;inset:0;width:100%;height:100%;box-sizing:border-box;padding:2px 5px;background:var(--bg2);border:1.5px solid var(--ac);border-radius:3px;color:var(--tx);font-family:inherit;font-size:.78rem;outline:none;z-index:10}
+    /* text cells: wrap long content */
+    .jnl-memo-view{white-space:normal;word-break:break-word;max-width:200px;line-height:1.35}
+    #jnl-sheet td{position:relative}
     .jnl-memo-view{max-width:220px;min-width:120px}
     #jnl-sheet th.jnl-sort-th{cursor:pointer;user-select:none;white-space:nowrap}
     #jnl-sheet th.jnl-sort-th:hover{color:var(--tx)}
@@ -203,10 +207,8 @@
     .jnl-mpanel-hdr h3{font-size:.82rem;font-weight:500;color:var(--tx2)}
     .jnl-mpanel-hdr:hover h3{color:var(--tx)}
     .jnl-mpanel-arrow{font-size:.65rem;color:var(--tx2);width:14px}
-    /* toggle: grid trick requires direct child to have min-height:0 */
-    .jnl-month-wrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease;overflow:hidden}
-    .jnl-month-wrap.open{grid-template-rows:1fr}
-    .jnl-month-wrap>div{min-height:0;overflow:hidden}
+    /* toggle: JS-measured max-height, instant response */
+    .jnl-month-wrap{max-height:0;overflow:hidden;transition:max-height .2s ease}
     /* monthly bar chart — CSS-only, columns aligned with stats */
     .jnl-mchart-outer{overflow-x:auto;padding:4px 0 2px;margin-bottom:4px}
     .jnl-mchart-cols{display:flex;gap:5px;min-width:max-content;align-items:flex-end}
@@ -217,7 +219,7 @@
     .jnl-mchart-bar{border-radius:3px;min-height:2px;width:100%}
     .jnl-mchart-bar.pos{background:rgba(94,201,138,.8)}
     .jnl-mchart-bar.neg{background:rgba(224,120,136,.8)}
-    .jnl-mchart-zero{width:100%;height:1px;background:rgba(255,255,255,.12);flex-shrink:0;margin:0 0}
+    .jnl-mchart-zero{width:100%;height:2px;background:rgba(255,255,255,.25);flex-shrink:0}
     .jnl-mchart-label{font-size:.64rem;color:var(--ac);font-weight:600;margin-top:5px;white-space:nowrap}
     .jnl-mchart-profit{font-size:.68rem;font-weight:700;margin-top:2px;white-space:nowrap}
     .jnl-mchart-sub{font-size:.60rem;color:var(--tx2);margin-top:1px;white-space:nowrap}
@@ -1178,15 +1180,16 @@ window.jnlEdit=function(span){
   inp.type=isDate?'date':isTxt?'text':'number';
   inp.value=curRaw==='—'?'':curRaw;
   if(!isDate&&!isTxt)inp.step='any';
-  span.style.display='none';
+  // Overlay: keep span visible, input positioned absolute on top → no layout jump
   span.dataset.editing='1';
   span.parentElement.appendChild(inp);
   requestAnimationFrame(()=>{inp.focus();inp.select();});
+  _jnlLastSpan=span; // track for global paste
 
   async function commit(){
     let newRaw=inp.value.trim();
     if(newRaw.startsWith('='))newRaw=String(jnlEvalFormula(newRaw));
-    inp.remove();span.style.display='';delete span.dataset.editing;
+    inp.remove();delete span.dataset.editing;
     if(newRaw===curRaw)return;
     const entry=journal.find(e=>e.id===id);if(!entry)return;
     const update=isDate?{date:newRaw}:col.upd(newRaw);
@@ -1217,7 +1220,7 @@ window.jnlEdit=function(span){
   inp.addEventListener('blur',commit);
   inp.addEventListener('keydown',ev=>{
     if(ev.key==='Enter'){ev.preventDefault();inp.blur();}
-    if(ev.key==='Escape'){inp.removeEventListener('blur',commit);inp.remove();span.style.display='';delete span.dataset.editing;}
+    if(ev.key==='Escape'){inp.removeEventListener('blur',commit);inp.remove();delete span.dataset.editing;}
     if(ev.key==='Tab'){ev.preventDefault();inp.blur();
       const tds=[...span.closest('tr').querySelectorAll('td')];
       const cur=tds.indexOf(span.parentElement);
@@ -1225,54 +1228,14 @@ window.jnlEdit=function(span){
       if(nxt)setTimeout(()=>nxt.click(),30);}
   });
 
-  // ── Excel paste: multi-row/multi-col ──
+  // ── Excel paste: multi-row/multi-col (delegates to _doJnlPaste) ──
   inp.addEventListener('paste',async ev=>{
     const raw=(ev.clipboardData||window.clipboardData).getData('text/plain');
     const rows=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(r=>r!=='');
-    if(rows.length<=1&&!rows[0]?.includes('\t'))return; // single value → default
+    if(rows.length<=1&&!rows[0]?.includes('\t'))return; // single value → default paste
     ev.preventDefault();
-    inp.removeEventListener('blur',commit);inp.remove();span.style.display='';delete span.dataset.editing;
-
-    const customCols=getCustomCols();
-    const allCols=getOrderedCols([
-      ...JNL_COLS,
-      ...customCols.map(c=>({key:'cd_'+c.id,label:c.label,fmt:c.fmt==='num'?'usd':'txt',
-        isCustom:true,customId:c.id,customFmt:c.fmt,
-        get:e=>e.customData?.[c.id],
-        upd:v=>({[`customData.${c.id}`]:c.fmt==='num'?+v||0:v})}))
-    ]).filter(c=>!c.readonly);
-
-    const curKey=span.dataset.key;
-    const allTrs=[...document.querySelectorAll('#jnl-sheet-body tr[data-id]')];
-    const startR=allTrs.indexOf(span.closest('tr'));
-    const startC=allCols.findIndex(c=>c.key===curKey);
-    if(startR===-1||startC===-1)return;
-
-    const parsed=rows.map(r=>r.split('\t'));
-    let count=0;
-    for(let ri=0;ri<parsed.length;ri++){
-      const rowIdx=startR+ri;if(rowIdx>=allTrs.length)break;
-      const tr=allTrs[rowIdx];const entryId=tr.dataset.id;
-      const entry=journal.find(e=>e.id===entryId);if(!entry)continue;
-      const updates={};
-      for(let ci=0;ci<parsed[ri].length;ci++){
-        const colIdx=startC+ci;if(colIdx>=allCols.length)break;
-        const c=allCols[colIdx];if(!c||c.readonly)continue;
-        const v=parsed[ri][ci].trim().replace(/,/g,''); // strip commas
-        Object.assign(updates,c.upd(v));
-      }
-      if(!Object.keys(updates).length)continue;
-      await db.collection('trading_journal').doc(entryId).update(updates);
-      for(const[k,v]of Object.entries(updates)){
-        if(k.includes('.')){const p=k.split('.');
-          if(p.length===3)entry[p[0]]={...entry[p[0]],[p[1]]:{...(entry[p[0]]?.[p[1]]||{}),[p[2]]:v}};
-          else if(p.length===2)entry[p[0]]={...entry[p[0]],[p[1]]:v};
-        }else entry[k]=v;
-      }
-      count++;
-    }
-    renderJournal();
-    toast(`${count}행 붙여넣기 완료`,'ok');
+    inp.removeEventListener('blur',commit);inp.remove();delete span.dataset.editing;
+    await _doJnlPaste(raw,span);
   });
 };
 
@@ -1321,12 +1284,14 @@ function renderJnlMonthlySummary(){
   const cols=months.map(m=>{
     const d=byM[m];
     const pct=Math.abs(d.profit)/maxAbs;
-    const barH=Math.max(Math.round(pct*64),2);
+    const barH=Math.max(Math.round(pct*60),2); // 60px max bar height
     const isPos=d.profit>=0;
     const pSign=isPos?'+':'-';
     const pCls=isPos?'pos':'neg';
     const wr=d.days?Math.round(d.wins/d.days*100):0;
+    const avgR=d.days?(d.rate/d.days).toFixed(1):0;
     const lbl=m.slice(2).replace('-','/'); // "25/07"
+    const pPnlStr=d.pPnl?`<div class="jnl-mchart-sub" style="color:var(--ac);opacity:.8">개인 ${d.pPnl>=0?'+':'-'}$${fmtN(Math.abs(d.pPnl))}</div>`:'';
     return`<div class="jnl-mchart-col">
       <div class="jnl-mchart-bars">
         <div class="jnl-mchart-pos-area">${isPos?`<div class="jnl-mchart-bar pos" style="height:${barH}px"></div>`:''}</div>
@@ -1335,7 +1300,8 @@ function renderJnlMonthlySummary(){
       </div>
       <div class="jnl-mchart-label">${lbl}</div>
       <div class="jnl-mchart-profit ${pCls}">${pSign}$${fmtN(Math.abs(d.profit))}</div>
-      <div class="jnl-mchart-sub">${d.days}일 · ${wr}%</div>
+      <div class="jnl-mchart-sub">${d.days}일 · ${wr}% · ${avgR}%/일</div>
+      ${pPnlStr}
     </div>`;
   }).join('');
 
@@ -1343,10 +1309,26 @@ function renderJnlMonthlySummary(){
 }
 
 window.toggleJnlPanel=function(){
-  const wrap=document.getElementById('jnl-month-wrap'),arrow=document.getElementById('jnl-panel-arrow');
-  if(!wrap)return;
-  wrap.classList.toggle('open');
-  if(arrow)arrow.textContent=wrap.classList.contains('open')?'▼':'▶';
+  const wrap=document.getElementById('jnl-month-wrap');
+  const inner=document.getElementById('jnl-month-inner');
+  const arrow=document.getElementById('jnl-panel-arrow');
+  if(!wrap||!inner)return;
+  if(wrap.classList.contains('open')){
+    // Close: pin current height then animate to 0
+    wrap.style.maxHeight=wrap.scrollHeight+'px';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{wrap.style.maxHeight='0';}));
+    wrap.classList.remove('open');
+    if(arrow)arrow.textContent='▶';
+  }else{
+    // Open: animate from 0 to actual content height
+    const h=inner.scrollHeight+8;
+    wrap.classList.add('open');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{wrap.style.maxHeight=h+'px';}));
+    wrap.addEventListener('transitionend',()=>{
+      if(wrap.classList.contains('open'))wrap.style.maxHeight='none';
+    },{once:true});
+    if(arrow)arrow.textContent='▼';
+  }
 };
 
 window.jnlSortToggle=function(){jnlSortAsc=!jnlSortAsc;renderJournal();};
@@ -1381,6 +1363,61 @@ function getOrderedCols(cols){
   return out;
 }
 let _jnlDragKey=null;
+let _jnlLastSpan=null; // tracks last-clicked cell for global paste
+
+/* Shared paste logic — distributes rows×cols of clipboard data from a starting span */
+async function _doJnlPaste(rawText,startSpan){
+  const rows=rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(r=>r!=='');
+  if(!rows.length)return;
+  const customCols=getCustomCols();
+  const allCols=getOrderedCols([
+    ...JNL_COLS,
+    ...customCols.map(c=>({key:'cd_'+c.id,label:c.label,fmt:c.fmt==='num'?'usd':'txt',
+      isCustom:true,customId:c.id,customFmt:c.fmt,
+      get:e=>e.customData?.[c.id],
+      upd:v=>({[`customData.${c.id}`]:c.fmt==='num'?+v||0:v})}))
+  ]).filter(c=>!c.readonly);
+  const curKey=startSpan.dataset.key;
+  const allTrs=[...document.querySelectorAll('#jnl-sheet-body tr[data-id]')];
+  const startR=allTrs.indexOf(startSpan.closest('tr'));
+  const startC=allCols.findIndex(c=>c.key===curKey);
+  if(startR===-1||startC===-1)return;
+  const parsed=rows.map(r=>r.split('\t'));
+  let count=0;
+  for(let ri=0;ri<parsed.length;ri++){
+    const rowIdx=startR+ri;if(rowIdx>=allTrs.length)break;
+    const tr=allTrs[rowIdx];const entryId=tr.dataset.id;
+    const entry=journal.find(e=>e.id===entryId);if(!entry)continue;
+    const updates={};
+    for(let ci=0;ci<parsed[ri].length;ci++){
+      const colIdx=startC+ci;if(colIdx>=allCols.length)break;
+      const c=allCols[colIdx];if(!c||c.readonly)continue;
+      const v=parsed[ri][ci].trim().replace(/,/g,'');
+      Object.assign(updates,c.upd(v));
+    }
+    if(!Object.keys(updates).length)continue;
+    await db.collection('trading_journal').doc(entryId).update(updates);
+    for(const[k,v]of Object.entries(updates)){
+      if(k.includes('.')){const p=k.split('.');
+        if(p.length===3)entry[p[0]]={...entry[p[0]],[p[1]]:{...(entry[p[0]]?.[p[1]]||{}),[p[2]]:v}};
+        else if(p.length===2)entry[p[0]]={...entry[p[0]],[p[1]]:v};
+      }else entry[k]=v;
+    }
+    count++;
+  }
+  renderJournal();
+  if(count)toast(`${count}행 붙여넣기 완료`,'ok');
+}
+
+/* Global paste: Ctrl+V when no input active, uses last-clicked cell */
+document.addEventListener('paste',async ev=>{
+  if(document.querySelector('#jnl-sheet .jnl-cell-input'))return; // active input handles it
+  if(!_jnlLastSpan?.closest?.('#jnl-sheet-body'))return;
+  const raw=ev.clipboardData.getData('text/plain');
+  if(!raw.trim())return;
+  ev.preventDefault();
+  await _doJnlPaste(raw,_jnlLastSpan);
+});
 window.jnlColDragStart=function(e){
   _jnlDragKey=e.currentTarget.dataset.colKey;
   e.currentTarget.style.opacity='.45';
@@ -1412,16 +1449,18 @@ window.jnlColDrop=function(e){
   renderJournal();
 };
 
-/* USD/KRW daily rate via frankfurter.app (ECB-based, free, no key) */
+/* USD/KRW daily rate — JSDelivr CDN (CDN-hosted, always CORS OK) */
 async function fetchTetherRate(date){
   try{
-    // Use latest for today or future; historical for past dates
     const today_=new Date().toISOString().slice(0,10);
-    const endpoint=date>=today_?'latest':date;
-    const r=await fetch(`https://api.frankfurter.app/${endpoint}?from=USD&to=KRW`);
+    const tag=date>=today_?'latest':date; // latest for today/future
+    const r=await fetch(
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${tag}/v1/currencies/usd.json`
+    );
     if(!r.ok)return null;
     const d=await r.json();
-    return d?.rates?.KRW||null;
+    const rate=d?.usd?.krw;
+    return rate?Math.round(rate):null; // return integer KRW rate
   }catch{return null;}
 }
 
