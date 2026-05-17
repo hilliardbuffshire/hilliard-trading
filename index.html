@@ -1170,6 +1170,7 @@ async function captureTradeChart(){
 /* ── Lightweight Charts (Trade Modal) ── */
 let lcChart=null,lcSeries=null,lcEntryLine=null,lcExitLine=null;
 let lcTool=null,lcHLines=[],lcTLines=[],lcPctLines=[],lcDrawStart=null,lcSymTimer=null;
+let lcPreviewLine=null,lcPreviewEndPL=null;
 
 /* 날짜 → 요일 자동 계산 */
 const _DNAMES=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
@@ -1194,7 +1195,7 @@ async function initLC(){
   const iv=document.getElementById('lc-int').value||'1d';
   const container=document.getElementById('lc-container');
   if(!container)return;
-  if(lcChart){try{lcChart.remove();}catch(e){}lcChart=null;lcSeries=null;lcEntryLine=null;lcExitLine=null;lcHLines=[];lcTLines=[];lcPctLines=[];}
+  if(lcChart){try{lcChart.remove();}catch(e){}lcChart=null;lcSeries=null;lcEntryLine=null;lcExitLine=null;lcHLines=[];lcTLines=[];lcPctLines=[];lcPreviewLine=null;lcPreviewEndPL=null;lcDrawStart=null;}
   document.getElementById('lc-loading').style.display='block';
   container.innerHTML='';
   try{
@@ -1215,62 +1216,116 @@ async function initLC(){
     lcSeries.setData(candles);
     lcChart.timeScale().fitContent();
     lcChart.subscribeClick(lcChartClick);
+    lcChart.subscribeCrosshairMove(lcCrosshairMove);
     updateLCLines();
   }catch(e){container.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--tx2);font-size:.82rem;flex-direction:column;gap:6px"><span>⚠️ 차트 로드 실패</span><span style="font-size:.72rem;opacity:.7">${e.message}</span></div>`;}
   document.getElementById('lc-loading').style.display='none';
   setLCTool(null);
 }
 
-/* subscribeClick 핸들러 — LC 내부 이벤트 사용 */
+/* subscribeClick 핸들러 */
 function lcChartClick(param){
   if(!lcTool||!lcChart||!lcSeries)return;
   if(!param.point)return;
   const price=lcSeries.coordinateToPrice(param.point.y);
-  const time=lcChart.timeScale().coordinateToTime(param.point.x);
-  if(price==null||!time)return;
+  if(price==null)return;
 
+  /* 수평선: time 불필요 */
   if(lcTool==='hline'){
     lcHLines.push(lcSeries.createPriceLine({price,color:'#c9a84c',lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title:''}));
+    return;
+  }
 
-  }else if(lcTool==='tline'){
+  const time=lcChart.timeScale().coordinateToTime(param.point.x);
+  if(!time)return;
+  const px=param.point.x,py=param.point.y;
+
+  /* 추세선 */
+  if(lcTool==='tline'){
     if(!lcDrawStart){
-      lcDrawStart={price,time};
-      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#c9a84c88',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:false,title:'●'});
+      /* 첫 클릭: 시작점 + 프리뷰 라인 생성 */
+      lcDrawStart={price,time,px,py};
+      lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'rgba(201,168,76,.55)',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'● 시작'});
+      lcPreviewLine=lcChart.addLineSeries({color:'rgba(201,168,76,.65)',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dashed,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+      try{lcPreviewLine.setData([{time,value:price}]);}catch(e){}
     }else{
-      if(lcDrawStart.startPL)try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}
-      const s=lcChart.addLineSeries({color:'#c9a84c',lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Solid,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
-      const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
-      if(pts[0].time!==pts[1].time){s.setData(pts);lcTLines.push(s);}
-      else{try{lcChart.removeSeries(s);}catch(e){}}
+      /* 두 번째 클릭: 프리뷰 제거 → 확정 라인 */
+      if(lcPreviewLine){try{lcChart.removeSeries(lcPreviewLine);}catch(e){}lcPreviewLine=null;}
+      if(lcDrawStart.startPL){try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}}
+      if(time!==lcDrawStart.time){
+        const s=lcChart.addLineSeries({color:'#c9a84c',lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Solid,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
+        s.setData(pts);lcTLines.push(s);
+      }
       lcDrawStart=null;
     }
 
+  /* % 구간 */
   }else if(lcTool==='pct'){
     if(!lcDrawStart){
-      lcDrawStart={price,time,px:param.point.x,py:param.point.y};
+      /* 첫 클릭: 시작점 (프리뷰 끝점은 마우스 이동마다 업데이트) */
+      lcDrawStart={price,time,px,py};
       lcDrawStart.startPL=lcSeries.createPriceLine({price,color:'#8899cc',lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'◀ 시작'});
     }else{
+      /* 두 번째 클릭: 프리뷰 제거 → 확정 */
+      if(lcPreviewEndPL){try{lcSeries.removePriceLine(lcPreviewEndPL);}catch(e){}lcPreviewEndPL=null;}
       const pct=(price-lcDrawStart.price)/lcDrawStart.price*100;
       const sign=pct>=0?'+':'';
       const col=pct>=0?'#5ec98a':'#e07888';
       const endPL=lcSeries.createPriceLine({price,color:col,lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:`${sign}${pct.toFixed(2)}%`});
       let lineSeries=null;
-      const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
-      if(pts[0].time!==pts[1].time){
+      if(time!==lcDrawStart.time){
+        const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
         lineSeries=lcChart.addLineSeries({color:col+'cc',lineWidth:1.5,lineStyle:LightweightCharts.LineStyle.Dashed,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
         lineSeries.setData(pts);
       }
       lcPctLines.push({lineSeries,startPL:lcDrawStart.startPL,endPL});
+      /* 툴팁: 프리뷰가 이미 보이고 있으므로 위치 그대로 유지 */
       const tip=document.getElementById('lc-pct-tip');
       if(tip){
         const c=document.getElementById('lc-container');
-        const cx=Math.min(Math.max((lcDrawStart.px+param.point.x)/2-50,4),(c?.clientWidth||800)-160);
-        const cy=Math.max((lcDrawStart.py+param.point.y)/2-30,4);
+        const cx=Math.min(Math.max((lcDrawStart.px+px)/2-50,4),(c?.clientWidth||800)-160);
+        const cy=Math.max((lcDrawStart.py+py)/2-30,4);
         const diff=Math.abs(price-lcDrawStart.price);
         tip.innerHTML=`<span style="color:${col};font-weight:700;font-size:.84rem">${sign}${pct.toFixed(2)}%</span>&ensp;<span style="color:rgba(255,255,255,.55);font-size:.72rem">Δ ${fmtN(diff)}</span>`;
         tip.style.left=cx+'px';tip.style.top=cy+'px';tip.style.display='block';
       }
       lcDrawStart=null;
+    }
+  }
+}
+
+/* 크로스헤어 이동 → 드로잉 실시간 프리뷰 */
+function lcCrosshairMove(param){
+  if(!param.point||!lcChart||!lcSeries||!lcDrawStart)return;
+  const price=lcSeries.coordinateToPrice(param.point.y);
+  const time=lcChart.timeScale().coordinateToTime(param.point.x);
+  if(price==null)return;
+  const px=param.point.x,py=param.point.y;
+
+  /* 추세선 프리뷰: 시작점~현재 마우스 위치까지 점선으로 표시 */
+  if(lcTool==='tline'&&lcPreviewLine&&time&&time!==lcDrawStart.time){
+    try{
+      const pts=[{time:lcDrawStart.time,value:lcDrawStart.price},{time,value:price}].sort((a,b)=>a.time-b.time);
+      lcPreviewLine.setData(pts);
+    }catch(e){}
+  }
+
+  /* % 프리뷰: 마우스 위치의 끝 가격선 + 실시간 % 툴팁 */
+  if(lcTool==='pct'){
+    if(lcPreviewEndPL){try{lcSeries.removePriceLine(lcPreviewEndPL);}catch(e){}lcPreviewEndPL=null;}
+    const pct=(price-lcDrawStart.price)/lcDrawStart.price*100;
+    const sign=pct>=0?'+':'';
+    const col=pct>=0?'#5ec98a':'#e07888';
+    lcPreviewEndPL=lcSeries.createPriceLine({price,color:col,lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:`${sign}${pct.toFixed(2)}%`});
+    const tip=document.getElementById('lc-pct-tip');
+    if(tip){
+      const c=document.getElementById('lc-container');
+      const cx=Math.min(Math.max((lcDrawStart.px+px)/2-50,4),(c?.clientWidth||800)-160);
+      const cy=Math.max((lcDrawStart.py+py)/2-30,4);
+      const diff=Math.abs(price-lcDrawStart.price);
+      tip.innerHTML=`<span style="color:${col};font-weight:700;font-size:.84rem">${sign}${pct.toFixed(2)}%</span>&ensp;<span style="color:rgba(255,255,255,.55);font-size:.72rem">Δ ${fmtN(diff)}</span>`;
+      tip.style.left=cx+'px';tip.style.top=cy+'px';tip.style.display='block';
     }
   }
 }
@@ -1287,8 +1342,12 @@ function updateLCLines(){
 }
 
 window.setLCTool=function(tool){
+  /* 진행 중인 드로잉 취소 + 프리뷰 정리 */
+  if(lcPreviewLine){try{lcChart.removeSeries(lcPreviewLine);}catch(e){}lcPreviewLine=null;}
+  if(lcPreviewEndPL&&lcSeries){try{lcSeries.removePriceLine(lcPreviewEndPL);}catch(e){}lcPreviewEndPL=null;}
   if(lcDrawStart?.startPL&&lcSeries){try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}}
   lcTool=tool;lcDrawStart=null;
+  const tip=document.getElementById('lc-pct-tip');if(tip)tip.style.display='none';
   ['cursor','hline','tline','pct'].forEach(t=>{
     const b=document.getElementById(`lctool-${t}`);
     if(b)b.classList.toggle('lc-tool-act',t===(tool||'cursor'));
@@ -1304,6 +1363,12 @@ function syncLCTFBtns(iv){
   document.querySelectorAll('.lc-tf').forEach(b=>b.classList.toggle('lc-tf-act',b.dataset.iv===iv));
 }
 window.clearLCDrawings=function(){
+  /* 진행 중 프리뷰 정리 */
+  if(lcPreviewLine&&lcChart){try{lcChart.removeSeries(lcPreviewLine);}catch(e){}lcPreviewLine=null;}
+  if(lcPreviewEndPL&&lcSeries){try{lcSeries.removePriceLine(lcPreviewEndPL);}catch(e){}lcPreviewEndPL=null;}
+  if(lcDrawStart?.startPL&&lcSeries){try{lcSeries.removePriceLine(lcDrawStart.startPL);}catch(e){}}
+  lcDrawStart=null;
+  /* 확정된 드로잉 전체 삭제 */
   if(lcSeries)lcHLines.forEach(pl=>{try{lcSeries.removePriceLine(pl);}catch(e){}});
   if(lcChart)lcTLines.forEach(s=>{try{lcChart.removeSeries(s);}catch(e){}});
   lcPctLines.forEach(({lineSeries,startPL,endPL})=>{
@@ -1311,7 +1376,7 @@ window.clearLCDrawings=function(){
     if(lcSeries&&startPL)try{lcSeries.removePriceLine(startPL);}catch(e){}
     if(lcSeries&&endPL)try{lcSeries.removePriceLine(endPL);}catch(e){}
   });
-  lcHLines=[];lcTLines=[];lcPctLines=[];lcDrawStart=null;
+  lcHLines=[];lcTLines=[];lcPctLines=[];
   const tip=document.getElementById('lc-pct-tip');if(tip)tip.style.display='none';
 };
 window.lcSymDebounced=function(){clearTimeout(lcSymTimer);lcSymTimer=setTimeout(()=>initLC(),700);};
