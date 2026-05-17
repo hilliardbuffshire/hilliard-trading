@@ -55,6 +55,16 @@
     .user-name{font-size:.78rem;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:155px;margin-bottom:4px}
     .logout-btn{background:none;border:none;color:var(--tx2);cursor:pointer;font-size:.72rem}
     .logout-btn:hover{color:var(--red)}
+    .user-switcher{padding:6px 10px 8px;border-bottom:1px solid var(--bd)}
+    .user-sw-btn{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:.82rem;color:var(--tx2);transition:all .15s}
+    .user-sw-btn:hover{background:var(--ac-dim);color:var(--tx)}
+    .user-sw-btn.active{background:var(--ac-dim);color:var(--ac-l);font-weight:500}
+    .user-sw-avatar{width:22px;height:22px;border-radius:50%;background:var(--bg3);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.62rem;color:var(--ac-l);font-weight:700;flex-shrink:0}
+    .user-sw-edit{margin-left:auto;font-size:.65rem;color:var(--tx2);opacity:0;transition:opacity .15s;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:3px}
+    .user-sw-btn:hover .user-sw-edit{opacity:.6}
+    .user-sw-edit:hover{opacity:1!important;color:var(--ac)}
+    .user-sw-add{display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:.75rem;color:var(--tx2);cursor:pointer;border-radius:5px;margin-top:2px}
+    .user-sw-add:hover{color:var(--ac)}
     .theme-label{font-size:.62rem;color:var(--tx2);letter-spacing:.08em;text-transform:uppercase;margin-top:14px;margin-bottom:6px}
     .theme-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
     .theme-dot{width:18px;height:18px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .15s,border-color .2s;position:relative;flex-shrink:0}
@@ -293,7 +303,11 @@
           </linearGradient>
         </defs>
       </svg>
-      <div class="name">매매일지</div>
+      <div class="name" id="brand-title">매매일지</div>
+    </div>
+    <div class="user-switcher">
+      <div id="user-sw-list"></div>
+      <div class="user-sw-add" onclick="addUser()">＋ 사용자 추가</div>
     </div>
     <nav class="sb-nav">
       <div class="nav-item active" data-view="dashboard"><span class="ni">🏠</span> 대시보드</div>
@@ -690,6 +704,52 @@ window.setTheme=function(t){
 };
 (()=>{const t=localStorage.getItem('hb_theme')||'gold';document.documentElement.setAttribute('data-theme',t);document.querySelectorAll('.theme-dot').forEach(d=>d.classList.toggle('active',d.dataset.t===t));})();
 
+/* ── Multi-User ── */
+const DEF_USERS=[{id:'sw',name:'정성원'},{id:'hk',name:'김한결'}];
+function getUsers(){try{return JSON.parse(localStorage.getItem('hb_users'))||DEF_USERS;}catch{return DEF_USERS;}}
+function saveUsers(u){localStorage.setItem('hb_users',JSON.stringify(u));}
+function getCurUid(){return localStorage.getItem('hb_cur_user')||getUsers()[0]?.id||'sw';}
+function setCurUid(id){localStorage.setItem('hb_cur_user',id);}
+function getCurUser(){return getUsers().find(u=>u.id===getCurUid())||getUsers()[0];}
+function updateBrandName(){const u=getCurUser();document.getElementById('brand-title').textContent=u?u.name+' 님의 매매일지':'매매일지';}
+function renderUserSwitcher(){
+  const users=getUsers(),cur=getCurUid();
+  document.getElementById('user-sw-list').innerHTML=users.map(u=>
+    `<div class="user-sw-btn${u.id===cur?' active':''}" onclick="switchUser('${u.id}')">
+      <div class="user-sw-avatar">${u.name.charAt(0)}</div>
+      <span>${u.name}</span>
+      <button class="user-sw-edit" onclick="event.stopPropagation();editUserName('${u.id}')" title="이름 수정">✎</button>
+    </div>`
+  ).join('');
+}
+window.switchUser=async function(id){
+  if(id===getCurUid())return;
+  setCurUid(id);
+  renderUserSwitcher();updateBrandName();
+  await Promise.all([fetchTrades(),fetchJournal()]);
+  const v=document.querySelector('.view.active')?.id?.replace('view-','');
+  renderDashboard();
+  if(v==='trades'){renderTrades();renderTradesCurve();}
+  if(v==='journal')renderJournal();
+  if(v==='seasonality')renderSeasonality();
+};
+window.addUser=function(){
+  const name=prompt('새 사용자 이름:');
+  if(!name?.trim())return;
+  const users=getUsers(),id='u'+Date.now();
+  users.push({id,name:name.trim()});
+  saveUsers(users);renderUserSwitcher();
+};
+window.editUserName=function(id){
+  const users=getUsers(),u=users.find(x=>x.id===id);
+  if(!u)return;
+  const name=prompt('사용자 이름 수정:',u.name);
+  if(!name?.trim())return;
+  u.name=name.trim();saveUsers(users);
+  renderUserSwitcher();
+  if(id===getCurUid())updateBrandName();
+};
+
 /* ── Auth ── */
 auth.onAuthStateChanged(u=>{
   if(u){
@@ -719,6 +779,7 @@ document.getElementById('logout-btn').addEventListener('click',()=>auth.signOut(
 
 /* ── Boot / Nav ── */
 async function boot(){
+  renderUserSwitcher();updateBrandName();
   buildExchToggles();buildExchInputs();
   document.getElementById('jnl-date').value=today();
   document.getElementById('tr-date').value=today();
@@ -800,8 +861,18 @@ window.calcJnlTotals=function(){
 };
 
 /* ── Firestore ── */
-async function fetchTrades() {const s=await db.collection('trading_trades').orderBy('date','asc').get();trades=s.docs.map(d=>({id:d.id,...d.data()}));}
-async function fetchJournal(){const s=await db.collection('trading_journal').orderBy('date','desc').get();journal=s.docs.map(d=>({id:d.id,...d.data()}));}
+async function fetchTrades(){
+  const uid=getCurUid(),isDefault=uid===getUsers()[0]?.id;
+  const s=await db.collection('trading_trades').orderBy('date','asc').get();
+  const all=s.docs.map(d=>({id:d.id,...d.data()}));
+  trades=all.filter(t=>isDefault?(!t.userId||t.userId===uid):t.userId===uid);
+}
+async function fetchJournal(){
+  const uid=getCurUid(),isDefault=uid===getUsers()[0]?.id;
+  const s=await db.collection('trading_journal').orderBy('date','desc').get();
+  const all=s.docs.map(d=>({id:d.id,...d.data()}));
+  journal=all.filter(e=>isDefault?(!e.userId||e.userId===uid):e.userId===uid);
+}
 async function recalcCumulatives(){
   trades.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:0);
   let cum=0;const batch=db.batch();
@@ -919,7 +990,7 @@ window.saveJournal=async function(){
     const images=[...savedImgs.jnl,...newImgs];
     const data={date,exchanges,totalSeed:+usdC.toFixed(2),profit,rate,
       withdrawal:document.getElementById('jnl-withdrawal').value,
-      memo:document.getElementById('jnl-memo').value,images};
+      memo:document.getElementById('jnl-memo').value,images,userId:getCurUid()};
     if(JSON.stringify(data).length>950000){toast('이미지 용량 초과. 이미지를 줄여주세요.','err');return;}
     if(editJnlId){await db.collection('trading_journal').doc(editJnlId).update(data);}
     else{data.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('trading_journal').add(data);}
@@ -1096,7 +1167,7 @@ window.saveTrade=async function(){
       entryDay:document.getElementById('tr-entry-day').value,exitDay:document.getElementById('tr-exit-day').value,
       memo:document.getElementById('tr-memo').value,
       lcSymbol:lcSym,lcInterval:lcInt,
-      images,
+      images,userId:getCurUid(),
     };
     if(autoChart)data.autoChart=autoChart;
     if(JSON.stringify(data).length>950000){toast('이미지 용량 초과. 이미지를 줄여주세요.','err');return;}
