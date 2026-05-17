@@ -182,6 +182,27 @@
     #toast.ok{border-color:var(--green);color:var(--green)}
     #toast.err{border-color:var(--red);color:var(--red)}
     .empty{color:var(--tx2);font-size:.83rem;padding:36px;text-align:center}
+
+    /* Journal Spreadsheet */
+    #jnl-sheet{table-layout:auto;font-size:.78rem}
+    #jnl-sheet th{background:var(--bg3);padding:7px 10px;font-size:.68rem;white-space:nowrap;position:sticky;top:0;z-index:5}
+    #jnl-sheet td{padding:0;vertical-align:middle}
+    #jnl-sheet td.jnl-n{padding:6px 8px;color:var(--tx2);font-size:.68rem;text-align:right;min-width:30px;white-space:nowrap}
+    .jnl-cell-view{padding:6px 10px;min-height:30px;display:block;cursor:pointer;white-space:nowrap;overflow:hidden;max-width:180px;text-overflow:ellipsis;transition:background .1s}
+    .jnl-cell-view:hover{background:var(--ac-dim)}
+    .jnl-cell-input{width:100%;min-width:90px;padding:6px 10px;background:rgba(212,170,80,.12);border:none;border-bottom:2px solid var(--ac);color:var(--tx);font-family:inherit;font-size:.78rem;outline:none}
+    .jnl-memo-view{max-width:220px;min-width:120px}
+    /* Monthly panel */
+    .jnl-monthly-panel{margin-bottom:18px}
+    .jnl-mpanel-hdr{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:6px 0;margin-bottom:4px}
+    .jnl-mpanel-hdr h3{font-size:.82rem;font-weight:500;color:var(--tx2)}
+    .jnl-mpanel-hdr:hover h3{color:var(--tx)}
+    .jnl-mpanel-arrow{font-size:.65rem;color:var(--tx2);width:14px}
+    .jnl-month-cards{display:flex;gap:10px;flex-wrap:wrap;padding:2px 0 8px}
+    .jnl-month-card{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:12px 16px;min-width:150px}
+    .jnl-month-card h4{font-size:.72rem;color:var(--tx2);margin-bottom:8px;font-weight:400;text-transform:uppercase;letter-spacing:.04em}
+    .jnl-mrow{display:flex;justify-content:space-between;gap:12px;font-size:.74rem;margin-bottom:3px;color:var(--tx2)}
+    .jnl-mrow span:last-child{color:var(--tx);font-weight:500}
     .badge.open-status{background:var(--ac-dim);color:var(--ac-l)}
     .tr-main-row{cursor:pointer}
     .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
@@ -384,16 +405,43 @@
     <section id="view-journal" class="view">
       <div class="page-header">
         <div class="page-title">매매일지<span>Daily Journal</span></div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="jnl-count-badge" style="font-size:.78rem;color:var(--tx2)"></span>
           <button class="btn btn-secondary" onclick="openImportModal('journal')">📥 가져오기</button>
-          <button class="btn btn-primary" onclick="openJournalModal()">+ 새 기록</button>
+          <button class="btn btn-primary" onclick="addJnlRow()">+ 행 추가</button>
         </div>
       </div>
-      <div class="filter-bar"><input type="month" id="jnl-filter-month" onchange="renderJournal()"></div>
-      <div class="table-card"><div class="tbl-wrap"><table>
-        <thead><tr id="jnl-thead"></tr></thead>
-        <tbody id="journal-tbody"></tbody>
-      </table></div></div>
+      <!-- Monthly summary panel -->
+      <div class="jnl-monthly-panel" id="jnl-monthly-panel">
+        <div class="jnl-mpanel-hdr" onclick="toggleJnlPanel()">
+          <span class="jnl-mpanel-arrow" id="jnl-panel-arrow">▶</span>
+          <h3>월별 정산 요약</h3>
+        </div>
+        <div id="jnl-month-cards" class="jnl-month-cards" style="display:none"></div>
+      </div>
+      <!-- Spreadsheet table -->
+      <div class="table-card" style="overflow:visible">
+        <div class="tbl-wrap">
+          <table id="jnl-sheet">
+            <thead><tr>
+              <th class="jnl-n">#</th>
+              <th>날짜</th>
+              <th>업비트마감</th>
+              <th>빗썸마감</th>
+              <th>퓨쳐스마감</th>
+              <th>테더</th>
+              <th>총시드($)</th>
+              <th>수익금($)</th>
+              <th>수익률</th>
+              <th>개인매매수익</th>
+              <th>개인매매누적</th>
+              <th>비고</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="jnl-sheet-body"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- Seasonality -->
@@ -896,6 +944,16 @@ function renderDashboard(){
   const grossW=wins.reduce((a,t)=>a+(+t.pnl||0),0);
   const grossL=Math.abs(losses.reduce((a,t)=>a+(+t.pnl||0),0));
   const pf=grossL?(grossW/grossL).toFixed(2):wins.length?'∞':'—';
+  // Journal-based stats
+  const jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+  const latestJnl=jnlSorted[jnlSorted.length-1];
+  const curSeed=latestJnl?.totalSeed||0;
+  const jWin=journal.filter(e=>+e.profit>0).length;
+  const jLoss=journal.filter(e=>+e.profit<0).length;
+  const jWr=jWin+jLoss?(jWin/(jWin+jLoss)*100).toFixed(1):0;
+  const curM=new Date().toISOString().slice(0,7);
+  const mthProfit=journal.filter(e=>e.date?.startsWith(curM)).reduce((a,e)=>a+(+e.profit||0),0);
+
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat-card c-ac"><div class="stat-label">총 매매</div><div class="stat-value">${n}회</div><div class="stat-sub">${wins.length}승 ${losses.length}패</div></div>
     <div class="stat-card ${n&&wins.length/n>=.5?'c-green':'c-red'}"><div class="stat-label">승률</div><div class="stat-value">${wr}%</div></div>
@@ -903,7 +961,11 @@ function renderDashboard(){
     <div class="stat-card"><div class="stat-label">평균 손익%</div><div class="stat-value ${+avgP>=0?'pos':'neg'}">${avgP}%</div></div>
     <div class="stat-card c-red"><div class="stat-label">최대 낙폭 MDD</div><div class="stat-value">-${mdd.toFixed(2)}%</div></div>
     <div class="stat-card c-green"><div class="stat-label">평균 수익 (승)</div><div class="stat-value pos">+${avgWin}%</div></div>
-    <div class="stat-card c-red"><div class="stat-label">평균 손실 (패)</div><div class="stat-value neg">${avgLoss}%</div><div class="stat-sub">P.Factor ${pf}</div></div>`;
+    <div class="stat-card c-red"><div class="stat-label">평균 손실 (패)</div><div class="stat-value neg">${avgLoss}%</div><div class="stat-sub">P.Factor ${pf}</div></div>
+    ${curSeed?`<div class="stat-card c-ac"><div class="stat-label">현재 시드</div><div class="stat-value">$${fmtN(curSeed)}</div><div class="stat-sub">${latestJnl.date}</div></div>`:''}
+    ${jWin+jLoss?`<div class="stat-card ${+jWr>=50?'c-green':'c-red'}"><div class="stat-label">일지 수익일률</div><div class="stat-value">${jWr}%</div><div class="stat-sub">${jWin}수익 ${jLoss}손실</div></div>`:''}
+    ${journal.length?`<div class="stat-card ${mthProfit>=0?'c-green':'c-red'}"><div class="stat-label">이번달 수익금</div><div class="stat-value ${mthProfit>=0?'pos':'neg'}">${mthProfit>=0?'+':''}$${fmtN(Math.abs(mthProfit))}</div><div class="stat-sub">${curM}</div></div>`:''}
+    `;
   document.getElementById('dash-recent').innerHTML=
     [...trades].reverse().slice(0,6).map(t=>`<tr>
       <td>${t.date}</td><td>${t.symbol}</td>
@@ -923,26 +985,184 @@ function renderDashboard(){
   mkDonut('chart-winrate',wins.length,losses.length);
 }
 
-/* ── Journal ── */
+/* ── Journal Spreadsheet ── */
+const JNL_COLS=[
+  {key:'upbit',         label:'업비트마감',   fmt:'krw',
+    get:e=>e.exchanges?.upbit?.close,
+    upd:v=>({'exchanges.upbit.close':+v||0})},
+  {key:'bithumb',       label:'빗썸마감',     fmt:'krw',
+    get:e=>e.exchanges?.bithumb?.close,
+    upd:v=>({'exchanges.bithumb.close':+v||0})},
+  {key:'binance',       label:'퓨쳐스마감',   fmt:'usd',
+    get:e=>e.exchanges?.binance?.close,
+    upd:v=>({'exchanges.binance.close':+v||0})},
+  {key:'tether',        label:'테더',         fmt:'usd',
+    get:e=>e.tether,
+    upd:v=>({tether:+v||0})},
+  {key:'totalSeed',     label:'총시드($)',    fmt:'usd',
+    get:e=>e.totalSeed,
+    upd:v=>({totalSeed:+v||0})},
+  {key:'profit',        label:'수익금($)',    fmt:'pnl',
+    get:e=>e.profit,
+    upd:v=>({profit:+v||0})},
+  {key:'rate',          label:'수익률',       fmt:'pct',
+    get:e=>e.rate,
+    upd:v=>({rate:+v||0})},
+  {key:'personalPnl',   label:'개인매매수익', fmt:'pnl',
+    get:e=>e.personalPnl,
+    upd:v=>({personalPnl:+v||0})},
+  {key:'personalCumPnl',label:'개인매매누적', fmt:'pnl',
+    get:e=>e.personalCumPnl,
+    upd:v=>({personalCumPnl:+v||0})},
+  {key:'memo',          label:'비고',         fmt:'txt',
+    get:e=>e.memo,
+    upd:v=>({memo:v})},
+];
+
+function jnlFmt(val,fmt){
+  if(val===null||val===undefined||val==='')return'<span style="color:var(--tx2);opacity:.35">—</span>';
+  switch(fmt){
+    case'krw': return(+val).toLocaleString('ko-KR');
+    case'usd': return'$'+fmtN(+val);
+    case'pnl':{const n=+val;return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':''}$${fmtN(Math.abs(n))}</span>`;}
+    case'pct':{const n=+val;return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':''}${n.toFixed(2)}%</span>`;}
+    case'txt': return String(val).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    default:   return val;
+  }
+}
+
+function jnlEvalFormula(s){
+  if(typeof s!=='string'||!s.startsWith('='))return s;
+  try{const expr=s.slice(1).replace(/[^0-9+\-*/.(), %]/g,'');return Function('"use strict";return('+expr+');')();}
+  catch{return s;}
+}
+
 window.renderJournal=function(){
-  const list=getExchList();
-  const fm=document.getElementById('jnl-filter-month').value;
-  const data=fm?journal.filter(e=>e.date?.startsWith(fm)):journal;
-  document.getElementById('jnl-thead').innerHTML=`<th>날짜</th>${list.map(e=>`<th>${e.name}</th>`).join('')}<th>총시드</th><th>수익금</th><th>수익률</th><th>출금</th><th>메모</th><th></th>`;
-  document.getElementById('journal-tbody').innerHTML=data.map(e=>{
-    const cells=list.map(ex=>`<td>${e.exchanges?.[ex.id]?.close?fmtN(e.exchanges[ex.id].close):'—'}</td>`).join('');
-    const imgs=(e.images||[]).map(b=>`<img src="${b}" style="width:72px;height:48px;object-fit:cover;border-radius:4px;cursor:zoom-in;margin:1px;border:1px solid var(--bd)" onclick="openLB('${b}')">`).join('');
-    return`<tr><td>${e.date}</td>${cells}
-      <td>${e.totalSeed?'$'+fmtN(e.totalSeed):'—'}</td>
-      <td class="${+e.profit>=0?'pos':'neg'}">${e.profit?'+$'+fmtN(e.profit):'—'}</td>
-      <td class="${+e.rate>=0?'pos':'neg'}">${e.rate?e.rate+'%':'—'}</td>
-      <td style="color:var(--tx2);font-size:.78rem">${e.withdrawal||''}</td>
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;font-size:.78rem;color:var(--tx2)">${e.memo||''}</td>
-      <td>${imgs}<button class="btn btn-edit btn-sm" style="margin-left:4px" onclick="editJnl('${e.id}')">편집</button><button class="btn btn-danger btn-sm" style="margin-left:2px" onclick="del('trading_journal','${e.id}')">삭제</button></td>
+  const data=[...journal].sort((a,b)=>b.date>a.date?1:-1);
+  const tbody=document.getElementById('jnl-sheet-body');
+  if(!tbody)return;
+  tbody.innerHTML=data.map((e,i)=>{
+    const n=data.length-i;
+    const cols=JNL_COLS.map(c=>{
+      const val=c.get(e);
+      const disp=jnlFmt(val,c.fmt);
+      const raw=val??'';
+      const cls=c.key==='memo'?'jnl-memo-view':'';
+      return`<td><span class="jnl-cell-view ${cls}" data-id="${e.id}" data-key="${c.key}" data-val="${String(raw).replace(/"/g,'&quot;')}" onclick="jnlEdit(this)">${disp}</span></td>`;
+    }).join('');
+    return`<tr data-id="${e.id}">
+      <td class="jnl-n">${n}</td>
+      <td><span class="jnl-cell-view" data-id="${e.id}" data-key="date" data-val="${e.date||''}" onclick="jnlEdit(this)">${e.date||'<span style="opacity:.35">—</span>'}</span></td>
+      ${cols}
+      <td style="padding:3px 6px"><button class="btn btn-danger btn-sm" onclick="del('trading_journal','${e.id}')">✕</button></td>
     </tr>`;
-  }).join('')||`<tr><td colspan="${list.length+8}" class="empty">이 달 기록 없음</td></tr>`;
+  }).join('')||`<tr><td colspan="13" class="empty">기록 없음 — 행 추가 버튼으로 새 기록을 만드세요</td></tr>`;
+  const badge=document.getElementById('jnl-count-badge');
+  if(badge)badge.textContent=data.length?`총 ${data.length}건`:'';
+  renderJnlMonthlySummary();
 };
-window.editJnl=function(id){const e=journal.find(j=>j.id===id);if(e)openJournalModal(e);};
+
+window.jnlEdit=function(span){
+  if(span.dataset.editing)return;
+  const id=span.dataset.id, key=span.dataset.key;
+  const curRaw=span.dataset.val;
+  const col=JNL_COLS.find(c=>c.key===key);
+  const isDate=key==='date', isTxt=col?.fmt==='txt';
+  const inp=document.createElement('input');
+  inp.className='jnl-cell-input';
+  inp.type=isDate?'date':isTxt?'text':'number';
+  inp.value=curRaw==='—'?'':curRaw;
+  if(!isDate&&!isTxt){inp.step='any';}
+  span.style.display='none';
+  span.dataset.editing='1';
+  span.parentElement.appendChild(inp);
+  inp.focus();inp.select();
+
+  async function commit(){
+    let newRaw=inp.value.trim();
+    if(newRaw.startsWith('='))newRaw=String(jnlEvalFormula(newRaw));
+    inp.remove();
+    span.style.display='';
+    delete span.dataset.editing;
+    if(newRaw===curRaw)return;
+    const entry=journal.find(e=>e.id===id);if(!entry)return;
+    const update=isDate?{date:newRaw}:col.upd(newRaw);
+    try{
+      await db.collection('trading_journal').doc(id).update(update);
+      // patch local entry
+      if(isDate)entry.date=newRaw;
+      else{
+        const val=col.upd(newRaw);
+        for(const [k,v] of Object.entries(val)){
+          if(k.includes('.')){const [a,b,c]=k.split('.');if(c)entry[a]={...entry[a],[b]:{...(entry[a]?.[b]||{}),[c]:v}};else entry[a]={...entry[a],[b]:v};}
+          else entry[k]=v;
+        }
+      }
+      const freshVal=isDate?newRaw:col.get(entry);
+      span.innerHTML=isDate?(freshVal||'<span style="opacity:.35">—</span>'):jnlFmt(freshVal,col.fmt);
+      span.dataset.val=String(freshVal??'');
+      renderJnlMonthlySummary();
+    }catch(err){console.error(err);toast('저장 실패','err');}
+  }
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();inp.blur();}
+    if(ev.key==='Escape'){inp.removeEventListener('blur',commit);inp.remove();span.style.display='';delete span.dataset.editing;}
+    if(ev.key==='Tab'){ev.preventDefault();inp.blur();
+      // move focus to next cell
+      const tds=[...span.closest('tr').querySelectorAll('td')];
+      const cur=tds.indexOf(span.parentElement);
+      const nxt=tds[cur+1]?.querySelector('.jnl-cell-view');
+      if(nxt)setTimeout(()=>nxt.click(),30);}
+  });
+};
+
+window.addJnlRow=async function(){
+  const data={date:today(),exchanges:{upbit:{open:0,close:0},bithumb:{open:0,close:0},binance:{open:0,close:0}},
+    totalSeed:0,profit:0,rate:0,tether:0,personalPnl:0,personalCumPnl:0,memo:'',
+    userId:getCurUid(),createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  try{
+    const ref=await db.collection('trading_journal').add(data);
+    data.id=ref.id;journal.unshift(data);renderJournal();
+    // auto-focus date cell of new row (newest-first → first row)
+    const firstSpan=document.querySelector('#jnl-sheet-body tr:first-child .jnl-cell-view[data-key="date"]');
+    if(firstSpan)setTimeout(()=>firstSpan.click(),60);
+    toast('행 추가됨','ok');
+  }catch(e){console.error(e);toast('추가 실패','err');}
+};
+
+function renderJnlMonthlySummary(){
+  const el=document.getElementById('jnl-month-cards');if(!el)return;
+  const byM={};
+  journal.forEach(e=>{
+    const m=e.date?.slice(0,7);if(!m)return;
+    if(!byM[m])byM[m]={profit:0,rate:0,pPnl:0,days:0,seed:0};
+    byM[m].profit+=+(e.profit||0);byM[m].rate+=+(e.rate||0);
+    byM[m].pPnl+=+(e.personalPnl||0);byM[m].days++;byM[m].seed=+(e.totalSeed||0);
+  });
+  const months=Object.keys(byM).sort().reverse().slice(0,18);
+  if(!months.length){el.innerHTML='<div style="color:var(--tx2);font-size:.80rem;padding:6px 0">데이터 없음</div>';return;}
+  el.innerHTML=months.map(m=>{
+    const d=byM[m];const avgR=d.days?(d.rate/d.days).toFixed(2):0;
+    const pCls=d.profit>=0?'pos':'neg';const rCls=+avgR>=0?'pos':'neg';
+    return`<div class="jnl-month-card">
+      <h4>${m}</h4>
+      <div class="jnl-mrow"><span>영업일</span><span>${d.days}일</span></div>
+      <div class="jnl-mrow"><span>수익금</span><span class="${pCls}">${d.profit>=0?'+':''}$${fmtN(Math.abs(d.profit))}</span></div>
+      <div class="jnl-mrow"><span>일평균 수익률</span><span class="${rCls}">${avgR}%</span></div>
+      ${d.pPnl?`<div class="jnl-mrow"><span>개인매매</span><span class="${d.pPnl>=0?'pos':'neg'}">${d.pPnl>=0?'+':''}$${fmtN(Math.abs(d.pPnl))}</span></div>`:''}
+      ${d.seed?`<div class="jnl-mrow"><span>말일 시드</span><span>$${fmtN(d.seed)}</span></div>`:''}
+    </div>`;
+  }).join('');
+}
+
+window.toggleJnlPanel=function(){
+  const el=document.getElementById('jnl-month-cards'),arrow=document.getElementById('jnl-panel-arrow');
+  if(!el)return;
+  const show=el.style.display==='none';
+  el.style.display=show?'flex':'none';
+  if(arrow)arrow.textContent=show?'▼':'▶';
+};
 window.openJournalModal=function(entry=null){
   editJnlId=entry?entry.id:null;
   pend.jnl=[];savedImgs.jnl=[];
