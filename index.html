@@ -209,20 +209,24 @@
     .jnl-mpanel-arrow{font-size:.65rem;color:var(--tx2);width:14px}
     /* toggle: JS-measured max-height, instant response */
     .jnl-month-wrap{max-height:0;overflow:hidden;transition:max-height .2s ease}
-    /* monthly bar chart — CSS-only, columns aligned with stats */
-    .jnl-mchart-outer{overflow-x:auto;padding:4px 0 2px;margin-bottom:4px}
-    .jnl-mchart-cols{display:flex;gap:5px;min-width:max-content;align-items:flex-end}
-    .jnl-mchart-col{display:flex;flex-direction:column;align-items:center;width:64px;flex-shrink:0}
-    .jnl-mchart-bars{height:72px;display:flex;flex-direction:column;width:100%;position:relative}
-    .jnl-mchart-pos-area{flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding:0 16px}
-    .jnl-mchart-neg-area{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:0 16px}
-    .jnl-mchart-bar{border-radius:3px;min-height:2px;width:100%}
-    .jnl-mchart-bar.pos{background:rgba(94,201,138,.8)}
-    .jnl-mchart-bar.neg{background:rgba(224,120,136,.8)}
-    .jnl-mchart-zero{width:100%;height:2px;background:rgba(255,255,255,.25);flex-shrink:0}
-    .jnl-mchart-label{font-size:.64rem;color:var(--ac);font-weight:600;margin-top:5px;white-space:nowrap}
-    .jnl-mchart-profit{font-size:.68rem;font-weight:700;margin-top:2px;white-space:nowrap}
-    .jnl-mchart-sub{font-size:.60rem;color:var(--tx2);margin-top:1px;white-space:nowrap}
+    /* monthly bar chart — CSS-only, columns fill available width */
+    .jnl-mchart-outer{overflow-x:auto;padding:4px 0 8px}
+    .jnl-mchart-cols{display:flex;gap:2px;width:100%}
+    .jnl-mchart-col{flex:1;min-width:72px;display:flex;flex-direction:column;align-items:center;border-radius:4px;padding:2px 0;position:relative;cursor:default;transition:background .15s}
+    .jnl-mchart-col:hover{background:rgba(255,255,255,.07)}
+    .jnl-mchart-col::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.07);pointer-events:none;transform:translateX(-50%)}
+    .jnl-mchart-col:hover::after{background:rgba(255,255,255,.22)}
+    /* bars: pos-area and neg-area are FIXED height = max-barH, so zero line never shifts */
+    .jnl-mchart-bars{height:122px;display:flex;flex-direction:column;width:100%}
+    .jnl-mchart-pos-area{height:60px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px}
+    .jnl-mchart-neg-area{height:60px;display:flex;flex-direction:column;justify-content:flex-start;padding:0 10px}
+    .jnl-mchart-bar{width:100%;min-height:2px}
+    .jnl-mchart-bar.pos{background:rgba(94,201,138,.85);border-radius:3px 3px 0 0}
+    .jnl-mchart-bar.neg{background:rgba(224,120,136,.85);border-radius:0 0 3px 3px}
+    .jnl-mchart-zero{width:100%;height:2px;background:rgba(255,255,255,.28);flex-shrink:0}
+    .jnl-mchart-label{font-size:.68rem;color:var(--ac);font-weight:600;margin-top:5px;white-space:nowrap}
+    .jnl-mchart-profit{font-size:.72rem;font-weight:700;margin-top:2px;white-space:nowrap}
+    .jnl-mchart-stats{font-size:.60rem;color:var(--tx2);margin-top:3px;text-align:center;line-height:1.65;white-space:nowrap}
     .badge.open-status{background:var(--ac-dim);color:var(--ac-l)}
     .tr-main-row{cursor:pointer}
     .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
@@ -1291,7 +1295,8 @@ function renderJnlMonthlySummary(){
     const wr=d.days?Math.round(d.wins/d.days*100):0;
     const avgR=d.days?(d.rate/d.days).toFixed(1):0;
     const lbl=m.slice(2).replace('-','/'); // "25/07"
-    const pPnlStr=d.pPnl?`<div class="jnl-mchart-sub" style="color:var(--ac);opacity:.8">개인 ${d.pPnl>=0?'+':'-'}$${fmtN(Math.abs(d.pPnl))}</div>`:'';
+    const statsLines=[`${d.days}일 · 승${wr}%`,`${avgR}%/일`];
+    if(d.pPnl)statsLines.push(`<span style="color:var(--ac);opacity:.85">개인 ${d.pPnl>=0?'+':'-'}$${fmtN(Math.abs(d.pPnl))}</span>`);
     return`<div class="jnl-mchart-col">
       <div class="jnl-mchart-bars">
         <div class="jnl-mchart-pos-area">${isPos?`<div class="jnl-mchart-bar pos" style="height:${barH}px"></div>`:''}</div>
@@ -1300,8 +1305,7 @@ function renderJnlMonthlySummary(){
       </div>
       <div class="jnl-mchart-label">${lbl}</div>
       <div class="jnl-mchart-profit ${pCls}">${pSign}$${fmtN(Math.abs(d.profit))}</div>
-      <div class="jnl-mchart-sub">${d.days}일 · ${wr}% · ${avgR}%/일</div>
-      ${pPnlStr}
+      <div class="jnl-mchart-stats">${statsLines.join('<br>')}</div>
     </div>`;
   }).join('');
 
