@@ -706,7 +706,7 @@ window.setTheme=function(t){
 
 /* ── Multi-User ── */
 const DEF_USERS=[{id:'sw',name:'정성원'},{id:'hk',name:'김한결'}];
-function getUsers(){try{return JSON.parse(localStorage.getItem('hb_users'))||DEF_USERS;}catch{return DEF_USERS;}}
+function getUsers(){try{const u=JSON.parse(localStorage.getItem('hb_users'));if(Array.isArray(u)&&u.length&&u[0]?.id&&u[0]?.name)return u;}catch{}return DEF_USERS;}
 function saveUsers(u){localStorage.setItem('hb_users',JSON.stringify(u));}
 function getCurUid(){return localStorage.getItem('hb_cur_user')||getUsers()[0]?.id||'sw';}
 function setCurUid(id){localStorage.setItem('hb_cur_user',id);}
@@ -779,6 +779,7 @@ document.getElementById('logout-btn').addEventListener('click',()=>auth.signOut(
 
 /* ── Boot / Nav ── */
 async function boot(){
+  if(!localStorage.getItem('hb_users')||!JSON.parse(localStorage.getItem('hb_users'))[0]?.id)saveUsers(DEF_USERS);
   renderUserSwitcher();updateBrandName();
   buildExchToggles();buildExchInputs();
   document.getElementById('jnl-date').value=today();
