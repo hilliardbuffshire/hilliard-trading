@@ -197,24 +197,30 @@
     #jnl-sheet th[draggable]{cursor:grab;user-select:none}
     #jnl-sheet th[draggable]:active{cursor:grabbing}
     .jnl-legend-pill{font-size:.62rem;color:var(--tx2);font-weight:400;background:var(--bg3);border:1px solid var(--bd);border-radius:20px;padding:2px 9px;margin-left:10px;vertical-align:middle;white-space:nowrap;cursor:default}
-    .jnl-legend-pill em{font-style:italic;color:var(--tx2);background:rgba(100,100,128,.12);padding:0 3px;border-radius:2px}
     /* Monthly panel */
     .jnl-monthly-panel{margin-bottom:18px}
     .jnl-mpanel-hdr{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:6px 0;margin-bottom:4px}
     .jnl-mpanel-hdr h3{font-size:.82rem;font-weight:500;color:var(--tx2)}
     .jnl-mpanel-hdr:hover h3{color:var(--tx)}
     .jnl-mpanel-arrow{font-size:.65rem;color:var(--tx2);width:14px}
-    /* toggle: grid-template-rows trick — animates to actual content height */
+    /* toggle: grid trick requires direct child to have min-height:0 */
     .jnl-month-wrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease;overflow:hidden}
     .jnl-month-wrap.open{grid-template-rows:1fr}
-    .jnl-month-cards{min-height:0;display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 6px}
-    /* monthly bar chart */
-    .jnl-month-chart-wrap{min-height:0;padding:0 2px 8px}
-    .jnl-month-chart-wrap canvas{display:block}
-    .jnl-month-card{background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;min-width:120px}
-    .jnl-month-card h4{font-size:.68rem;color:var(--ac);margin-bottom:6px;font-weight:600;letter-spacing:.03em}
-    .jnl-mrow{display:flex;justify-content:space-between;gap:8px;font-size:.70rem;margin-bottom:2px;color:var(--tx2)}
-    .jnl-mrow span:last-child{color:var(--tx);font-weight:500}
+    .jnl-month-wrap>div{min-height:0;overflow:hidden}
+    /* monthly bar chart — CSS-only, columns aligned with stats */
+    .jnl-mchart-outer{overflow-x:auto;padding:4px 0 2px;margin-bottom:4px}
+    .jnl-mchart-cols{display:flex;gap:5px;min-width:max-content;align-items:flex-end}
+    .jnl-mchart-col{display:flex;flex-direction:column;align-items:center;width:64px;flex-shrink:0}
+    .jnl-mchart-bars{height:72px;display:flex;flex-direction:column;width:100%;position:relative}
+    .jnl-mchart-pos-area{flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding:0 16px}
+    .jnl-mchart-neg-area{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:0 16px}
+    .jnl-mchart-bar{border-radius:3px;min-height:2px;width:100%}
+    .jnl-mchart-bar.pos{background:rgba(94,201,138,.8)}
+    .jnl-mchart-bar.neg{background:rgba(224,120,136,.8)}
+    .jnl-mchart-zero{width:100%;height:1px;background:rgba(255,255,255,.12);flex-shrink:0;margin:0 0}
+    .jnl-mchart-label{font-size:.64rem;color:var(--ac);font-weight:600;margin-top:5px;white-space:nowrap}
+    .jnl-mchart-profit{font-size:.68rem;font-weight:700;margin-top:2px;white-space:nowrap}
+    .jnl-mchart-sub{font-size:.60rem;color:var(--tx2);margin-top:1px;white-space:nowrap}
     .badge.open-status{background:var(--ac-dim);color:var(--ac-l)}
     .tr-main-row{cursor:pointer}
     .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
@@ -418,12 +424,11 @@
     <section id="view-journal" class="view">
       <div class="page-header">
         <div class="page-title">매매일지<span>Daily Journal</span>
-          <span class="jnl-legend-pill" title="⚡ 자동입력: 행 추가 시 자동으로 채워지는 칸 | 이탤릭: 계산값">⚡ 자동입력 &nbsp;·&nbsp; <em>이탤릭</em> 계산값</span>
+          <span class="jnl-legend-pill" title="⚡ 금색 점선 셀: 행 추가 시 자동으로 채워지는 칸">⚡ 자동입력</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="jnl-count-badge" style="font-size:.78rem;color:var(--tx2)"></span>
           <button class="btn btn-secondary btn-sm" onclick="addJnlCol()">＋ 열 추가</button>
-          <button class="btn btn-secondary btn-sm" onclick="fillMissingTether()" title="날짜별 원달러 환율 자동 조회·기입">🔄 환율 일괄입력</button>
           <button class="btn btn-secondary btn-sm" onclick="exportJournalXLSX()">📊 엑셀 내보내기</button>
           <button class="btn btn-secondary btn-sm" onclick="openImportModal('journal')">📥 가져오기</button>
           <button class="btn btn-primary btn-sm" onclick="addJnlRow()">+ 행 추가</button>
@@ -436,10 +441,7 @@
           <h3>월별 정산 요약</h3>
         </div>
         <div id="jnl-month-wrap" class="jnl-month-wrap">
-          <div>
-            <div class="jnl-month-chart-wrap"><canvas id="jnl-monthly-chart" height="72"></canvas></div>
-            <div id="jnl-month-cards" class="jnl-month-cards"></div>
-          </div>
+          <div id="jnl-month-inner"></div>
         </div>
       </div>
       <!-- Spreadsheet table -->
@@ -1300,62 +1302,44 @@ window.addJnlRow=async function(){
   }catch(e){console.error(e);toast('추가 실패','err');}
 };
 
-let _jnlMonthChart=null;
 function renderJnlMonthlySummary(){
-  const el=document.getElementById('jnl-month-cards');if(!el)return;
+  const el=document.getElementById('jnl-month-inner');if(!el)return;
   const byM={};
   journal.forEach(e=>{
     const m=e.date?.slice(0,7);if(!m)return;
-    if(!byM[m])byM[m]={profit:0,rate:0,pPnl:0,days:0,wins:0,seed:0};
+    if(!byM[m])byM[m]={profit:0,rate:0,pPnl:0,days:0,wins:0};
     byM[m].profit+=+(e.profit||0);byM[m].rate+=+(e.rate||0);
     byM[m].pPnl+=+(e.personalPnl||0);byM[m].days++;
     if((+e.profit||0)>0)byM[m].wins++;
-    byM[m].seed=+(e.totalSeed||0);
   });
-  const months=Object.keys(byM).sort().reverse().slice(0,18);
+  const allM=Object.keys(byM).sort(); // ascending for chart
+  const months=allM.slice(-18);       // up to 18 months
   if(!months.length){el.innerHTML='<div style="color:var(--tx2);font-size:.80rem;padding:6px 0">데이터 없음</div>';return;}
 
-  // ── Bar chart ──
-  const chartEl=document.getElementById('jnl-monthly-chart');
-  if(chartEl){
-    if(_jnlMonthChart){_jnlMonthChart.destroy();_jnlMonthChart=null;}
-    const labels=[...months].reverse().map(m=>m.replace('-','/')); // ascending
-    const profits=[...months].reverse().map(m=>+byM[m].profit.toFixed(2));
-    const colors=profits.map(v=>v>=0?'rgba(94,201,138,.75)':'rgba(224,120,136,.75)');
-    const borderColors=profits.map(v=>v>=0?'rgba(94,201,138,1)':'rgba(224,120,136,1)');
-    _jnlMonthChart=new Chart(chartEl,{
-      type:'bar',
-      data:{labels,datasets:[{data:profits,backgroundColor:colors,borderColor:borderColors,borderWidth:1,borderRadius:3}]},
-      options:{
-        responsive:true,maintainAspectRatio:false,
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw>=0?'+':''}$${fmtN(Math.abs(ctx.raw))}`}}},
-        scales:{
-          x:{ticks:{color:'rgba(196,170,128,.7)',font:{size:9}},grid:{display:false}},
-          y:{ticks:{color:'rgba(196,170,128,.7)',font:{size:9},callback:v=>`$${fmtN(Math.abs(v))}`},
-             grid:{color:'rgba(212,170,80,.08)'},
-             afterDataLimits:ax=>{const m=Math.max(Math.abs(ax.min),Math.abs(ax.max));ax.min=-m*1.15;ax.max=m*1.15;}}
-        }
-      }
-    });
-    chartEl.parentElement.style.height='90px';
-  }
+  const maxAbs=Math.max(...months.map(m=>Math.abs(byM[m].profit)),1);
 
-  // ── Month cards ──
-  el.innerHTML=months.map(m=>{
+  const cols=months.map(m=>{
     const d=byM[m];
-    const avgR=d.days?(d.rate/d.days).toFixed(2):0;
-    const pSign=d.profit>=0?'+':'-';
-    const pCls=d.profit>=0?'pos':'neg';
-    const rCls=+avgR>=0?'pos':'neg';
-    return`<div class="jnl-month-card">
-      <h4>${m.replace('-','/')}</h4>
-      <div class="jnl-mrow"><span>거래일</span><span>${d.days}일</span></div>
-      <div class="jnl-mrow"><span>수익금</span><span class="${pCls}">${pSign}$${fmtN(Math.abs(d.profit))}</span></div>
-      <div class="jnl-mrow"><span>승률</span><span class="${pCls}">${d.days?Math.round(d.wins/d.days*100):0}%</span></div>
-      <div class="jnl-mrow"><span>평균수익률</span><span class="${rCls}">${avgR}%</span></div>
-      ${d.pPnl?`<div class="jnl-mrow"><span>개인</span><span class="${d.pPnl>=0?'pos':'neg'}">${d.pPnl>=0?'+':'-'}$${fmtN(Math.abs(d.pPnl))}</span></div>`:''}
+    const pct=Math.abs(d.profit)/maxAbs;
+    const barH=Math.max(Math.round(pct*64),2);
+    const isPos=d.profit>=0;
+    const pSign=isPos?'+':'-';
+    const pCls=isPos?'pos':'neg';
+    const wr=d.days?Math.round(d.wins/d.days*100):0;
+    const lbl=m.slice(2).replace('-','/'); // "25/07"
+    return`<div class="jnl-mchart-col">
+      <div class="jnl-mchart-bars">
+        <div class="jnl-mchart-pos-area">${isPos?`<div class="jnl-mchart-bar pos" style="height:${barH}px"></div>`:''}</div>
+        <div class="jnl-mchart-zero"></div>
+        <div class="jnl-mchart-neg-area">${!isPos?`<div class="jnl-mchart-bar neg" style="height:${barH}px"></div>`:''}</div>
+      </div>
+      <div class="jnl-mchart-label">${lbl}</div>
+      <div class="jnl-mchart-profit ${pCls}">${pSign}$${fmtN(Math.abs(d.profit))}</div>
+      <div class="jnl-mchart-sub">${d.days}일 · ${wr}%</div>
     </div>`;
   }).join('');
+
+  el.innerHTML=`<div class="jnl-mchart-outer"><div class="jnl-mchart-cols">${cols}</div></div>`;
 }
 
 window.toggleJnlPanel=function(){
@@ -1428,15 +1412,16 @@ window.jnlColDrop=function(e){
   renderJournal();
 };
 
-/* Upbit USDT-KRW open price for a given date */
+/* USD/KRW daily rate via frankfurter.app (ECB-based, free, no key) */
 async function fetchTetherRate(date){
   try{
-    const to=encodeURIComponent(date+'T23:59:59');
-    const r=await fetch(`https://api.upbit.com/v1/candles/days?market=USDT-KRW&count=1&to=${to}`);
+    // Use latest for today or future; historical for past dates
+    const today_=new Date().toISOString().slice(0,10);
+    const endpoint=date>=today_?'latest':date;
+    const r=await fetch(`https://api.frankfurter.app/${endpoint}?from=USD&to=KRW`);
     if(!r.ok)return null;
     const d=await r.json();
-    if(!d?.length)return null;
-    return d[0].opening_price||d[0].trade_price||null;
+    return d?.rates?.KRW||null;
   }catch{return null;}
 }
 
