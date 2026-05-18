@@ -334,15 +334,6 @@
     .loss-alert .la-body{font-size:.84rem;line-height:1.5;color:var(--red)}
     .loss-alert .la-title{font-weight:600;margin-bottom:2px}
 
-    /* ── Monthly Target ── */
-    .mtarget-bar-wrap{margin-bottom:18px;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:14px 18px}
-    .mtarget-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-    .mtarget-label{font-size:.78rem;color:var(--tx2);white-space:nowrap}
-    .mtarget-inp{background:var(--bg3);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 9px;font-family:inherit;font-size:.83rem;width:120px}
-    .mtarget-inp:focus{outline:none;border-color:var(--ac)}
-    .mtarget-track{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;flex:1;min-width:100px}
-    .mtarget-fill{height:100%;border-radius:4px;transition:width .4s ease}
-    .mtarget-pct{font-size:.80rem;font-weight:600;white-space:nowrap}
   </style>
 </head>
 <body>
@@ -420,7 +411,6 @@
     <section id="view-dashboard" class="view active">
       <div class="page-header"><div class="page-title">대시보드<span>Overview</span></div></div>
       <div id="dash-alert"></div>
-      <div class="mtarget-bar-wrap" id="mtarget-wrap" style="display:none"></div>
       <div class="stat-grid" id="dash-stats"></div>
       <div id="dash-jnl-stats"></div>
       <div class="chart-row">
@@ -974,25 +964,6 @@ function renderDashboard(){
     }
   }
 
-  // ── Monthly Target Widget ──
-  const mtWrap=document.getElementById('mtarget-wrap');
-  if(mtWrap){
-    const uid=getCurUid();
-    const _tKey='hb_mtarget_'+uid+'_'+curM;
-    const _saved=+localStorage.getItem(_tKey)||0;
-    const pct=_saved>0?Math.min(Math.round(mthProfit/_saved*100),999):0;
-    const fillColor=mthProfit>=_saved?'var(--green)':mthProfit>=0?'var(--ac)':'var(--red)';
-    mtWrap.style.display='block';
-    mtWrap.innerHTML=`
-      <div class="mtarget-row">
-        <span class="mtarget-label">이번달 목표 수익금 ($)</span>
-        <input class="mtarget-inp" type="number" id="mtarget-inp" value="${_saved||''}" placeholder="목표 금액 입력" oninput="(function(v){localStorage.setItem('${_tKey}',v||0);renderDashboard();})(this.value)">
-        <span style="font-size:.78rem;color:var(--tx2)">달성: <b class="${mthProfit>=0?'pos':'neg'}">${mthProfit>=0?'+':'-'}$${fmtN(Math.abs(mthProfit))}</b></span>
-        ${_saved>0?`<span class="mtarget-pct" style="color:${fillColor}">${pct}%</span>`:''}
-      </div>
-      ${_saved>0?`<div style="display:flex;align-items:center;gap:8px"><div class="mtarget-track"><div class="mtarget-fill" style="width:${Math.max(0,Math.min(pct,100))}%;background:${fillColor}"></div></div><span style="font-size:.72rem;color:var(--tx2)">$0 → $${fmtN(_saved)}</span></div>`:''}`;
-  }
-
   // ── Stat cards with formula tooltips ──
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat-card c-ac"><div class="stat-label">총 매매</div><div class="stat-value">${n}회</div><div class="stat-sub">${wins.length}승 ${losses.length}패</div></div>
@@ -1041,6 +1012,7 @@ function renderDashboard(){
       // Drawdown recovery
       const curDD=curSeed>0&&sp>curSeed?sp-curSeed:0;
       const ddDaysToRecover=jEV>0&&curDD>0?Math.ceil(curDD/jEV):0;
+      const ddRecoverDate=(()=>{if(!ddDaysToRecover)return'';const d=new Date();d.setDate(d.getDate()+ddDaysToRecover);return d.toISOString().slice(0,10);})();
       const uName=getCurUser()?.name||'일지';
       jnlEl.innerHTML=`
         <div class="section-label" style="margin-top:20px;margin-bottom:10px">📋 ${uName} 매매일지 통계</div>
@@ -1049,13 +1021,13 @@ function renderDashboard(){
           <div class="stat-card ${+jWr>=50?'c-green':'c-red'}"><div class="stat-label tt" data-tip="일간 승률 = 수익일 ÷ 전체 거래일 × 100\n= ${jWin} ÷ ${active.length} × 100">일간 승률</div><div class="stat-value">${jWr}%</div></div>
           <div class="stat-card ${cumP>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="누적 수익금 = 매매일지 profit 컬럼 전체 합계\n= 총시드 변동폭 누적">누적 수익금</div><div class="stat-value ${cumP>=0?'pos':'neg'}">${cumP>=0?'+':'-'}$${fmtN(Math.abs(cumP))}</div></div>
           <div class="stat-card"><div class="stat-label tt" data-tip="일평균 손익 = 누적 수익금 ÷ 전체 거래일\n= $${fmtN(Math.abs(cumP))} ÷ ${active.length}">일평균 손익</div><div class="stat-value ${+avgDP>=0?'pos':'neg'}">${+avgDP>=0?'+':'-'}$${Math.abs(avgDP)}</div></div>
-          <div class="stat-card ${jEV>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="기대값(EV) = 승률 × 평균수익 - 패률 × 평균손실\n= ${jWr}% × $${fmtN(jAvgW)} - ${(100-+jWr).toFixed(1)}% × $${fmtN(jAvgL)}">거래당 기대값 EV</div><div class="stat-value ${jEV>=0?'pos':'neg'}">${jEV>=0?'+':'-'}$${fmtN(Math.abs(jEV))}</div><div class="stat-sub">WR×평균수익 − 패률×평균손실</div></div>
+          <div class="stat-card ${jEV>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="기대값(EV) = 승률 × 평균수익 - 패률 × 평균손실\n= ${jWr}% × $${fmtN(jAvgW)} - ${(100-+jWr).toFixed(1)}% × $${fmtN(jAvgL)}">거래당 기대값 EV</div><div class="stat-value ${jEV>=0?'pos':'neg'}">${jEV>=0?'+':'-'}$${fmtN(Math.abs(jEV))}</div><div class="stat-sub">승률×평균수익 − 패률×평균손실</div></div>
           <div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">${maxW}일</div>${wStart?`<div class="stat-sub">${wStart}~${wEnd.slice(5)}</div>`:''}</div>
           <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div>${lStart?`<div class="stat-sub">${lStart}~${lEnd.slice(5)}</div>`:''}</div>
           <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label tt" data-tip="P-Factor = 총수익금 ÷ 총손실금\n= $${fmtN(jGrossW)} ÷ $${fmtN(jGrossL)}\n>1이면 수익, <1이면 손실 구조">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
           <div class="stat-card"><div class="stat-label tt" data-tip="평균 수익일 = 수익일 합계 ÷ 수익일 수 ($${fmtN(jGrossW)} ÷ ${jWin})\n평균 손실일 = 손실일 합계 ÷ 손실일 수 ($${fmtN(jGrossL)} ÷ ${jLoss})">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$${fmtN(jAvgW)}</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$${fmtN(jAvgL)}</span></div><div class="stat-sub">수익${jWin}일 · 손실${jLoss}일</div></div>
           ${jKelly>0?`<div class="stat-card ${jHalfKelly>=0.05?'c-green':''}"><div class="stat-label tt" data-tip="켈리 기준 = WR - (1-WR) ÷ RR\nRR(손익비) = 평균수익($${fmtN(jAvgW)}) ÷ 평균손실($${fmtN(jAvgL)}) = ${jRR.toFixed(2)}\n풀 켈리: ${(jKelly*100).toFixed(1)}% → 반 켈리(권장): ${(jHalfKelly*100).toFixed(1)}%">켈리 포지션 크기</div><div class="stat-value">${(jHalfKelly*100).toFixed(1)}%<span style="font-size:.65rem;color:var(--tx2);font-weight:400"> 반켈리</span></div><div class="stat-sub">${kellyDollar?`권장 베팅 $${fmtN(kellyDollar)} (풀켈리 ${(jKelly*100).toFixed(1)}%)`:''}</div></div>`:''}
-          ${curDD>0?`<div class="stat-card c-red"><div class="stat-label tt" data-tip="드로다운 = 고점 시드($${fmtN(sp)}) - 현재 시드($${fmtN(curSeed)})\n회복 예상일 = 낙폭($${fmtN(curDD)}) ÷ 일일 EV($${fmtN(jEV)})\n${ddDaysToRecover>0?'약 '+ddDaysToRecover+'일 후 회복 예상':'EV 음수 → 회복 불투명'}">드로다운 회복 예측</div><div class="stat-value neg">-$${fmtN(curDD)}</div><div class="stat-sub">${ddDaysToRecover>0?`EV 기준 약 ${ddDaysToRecover}일 후 회복`:'EV 개선 필요'}</div></div>`:''}
+          ${curDD>0?`<div class="stat-card c-red"><div class="stat-label tt" data-tip="낙폭 회복 예측\n고점 시드: $${fmtN(sp)} (${spDate})\n현재 시드: $${fmtN(curSeed)}\n현재 낙폭: -$${fmtN(curDD)} (${(curDD/sp*100).toFixed(1)}%)\n\n일일 기대값(EV): ${jEV>0?'+':''}$${fmtN(jEV)}\n회복 예상: ${ddDaysToRecover>0?'약 '+ddDaysToRecover+'거래일 후 ('+ddRecoverDate+')':'EV가 0 이하이므로 예측 불가'}">낙폭 회복 예측</div><div class="stat-value neg">${ddDaysToRecover>0?`약 ${ddDaysToRecover}일`:'회복 불투명'}</div><div class="stat-sub">${ddDaysToRecover>0?`$${fmtN(curDD)} 낙폭 → ${ddRecoverDate} 예상`:`EV $${fmtN(jEV)}/일 → 전략 개선 필요`}</div></div>`:''}
         </div>
         <div class="section-label" style="margin-top:18px;margin-bottom:8px">📅 요일별 수익 패턴</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1081,26 +1053,50 @@ function renderDashboard(){
           })()}
         </div>
         <div class="section-label" style="margin-top:18px;margin-bottom:8px">💡 매매 분석 인사이트</div>
-        <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;flex-direction:column;gap:7px" id="jnl-insights-static">
           ${(()=>{
             const insights=[];
             const wr2=+jWr,pf=isNaN(+jPF)?null:+jPF,avgW2=+jAvgW,avgL2=+jAvgL;
+            // Win rate
             if(wr2<40)insights.push({c:'var(--red)',t:`📉 일간 승률 ${wr2}%로 매우 낮습니다. 수익일(${jWin}일)보다 손실일(${jLoss}일)이 ${jLoss-jWin}일 더 많습니다. 진입 타이밍과 포지션 관리 전략 검토가 필요합니다.`});
-            else if(wr2<50)insights.push({c:'rgba(255,180,0,.8)',t:`⚠️ 승률 ${wr2}%로 50% 미만입니다. 수익일 평균이 $${fmtN(avgW2)}로 손실일 평균($${fmtN(avgL2)})보다 ${avgW2>=avgL2?'크지만':'작고'} 손실일 수가 더 많아 전체 손실 중입니다.`});
-            else insights.push({c:'var(--green)',t:`✅ 승률 ${wr2}%로 양호합니다.`});
-            if(pf!==null&&pf<1){
-              const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);
-              insights.push({c:'var(--red)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현재 수익/손실 평균 비율을 유지하려면 승률이 최소 ${needWr}% 이상이어야 손익분기점에 도달합니다 (현재 ${wr2}%).`});
-            }else if(pf!==null)insights.push({c:'var(--green)',t:`💰 손익비 ${jPF}로 수익/손실 비율이 양호합니다.`});
-            if(curLossStreak>=3)insights.push({c:'var(--red)',t:`🔴 현재 연속 손실 ${curLossStreak}일 진행 중입니다. 포지션 크기를 즉시 축소하고 전략을 재검토하세요.`});
-            if(maxL>=5)insights.push({c:'var(--red)',t:`🔴 최장 연속 손실 ${maxL}일은 위험 신호입니다. 연속 손실 3일 이후 포지션 크기 축소 규칙 도입을 권장합니다.`});
-            if(maxW>=3)insights.push({c:'var(--green)',t:`🟢 최장 연승 ${maxW}일은 상승 모멘텀이 있음을 시사합니다. 연승 기간에는 리스크를 적절히 활용하되 과도한 레버리지는 주의하세요.`});
+            else if(wr2<50)insights.push({c:'rgba(255,180,0,.8)',t:`⚠️ 승률 ${wr2}%로 50% 미만입니다. 수익일 평균 $${fmtN(avgW2)}이 손실일 평균 $${fmtN(avgL2)}보다 ${avgW2>=avgL2?'크기 때문에 손익분기점 유지는 가능하지만, 손실일이 더 많아 주의가 필요합니다.':'작아 이중 불리한 구조입니다.'}`});
+            else insights.push({c:'var(--green)',t:`✅ 승률 ${wr2}%로 양호합니다. 수익일 평균 $${fmtN(avgW2)} / 손실일 평균 $${fmtN(avgL2)}.`});
+            // P-Factor
+            if(pf!==null&&pf<1){const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);insights.push({c:'var(--red)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현 R:R 유지 시 손익분기 최소 승률은 ${needWr}% (현재 ${wr2}%, ${breakEvenGap=needWr-wr2}%p 미달).`});}
+            else if(pf!==null)insights.push({c:'var(--green)',t:`💰 손익비 P-Factor ${jPF} ≥ 1로 양호합니다. 수익 구조가 손실 구조보다 큽니다.`});
+            // Streak
+            if(curLossStreak>=3)insights.push({c:'var(--red)',t:`🔴 현재 연속 손실 ${curLossStreak}일 진행 중입니다. 즉시 포지션 크기를 50% 이하로 줄이고 전략 일관성을 점검하세요.`});
+            if(maxL>=5)insights.push({c:'var(--red)',t:`⚠️ 역대 최장 연속 손실 ${maxL}일 기록이 있습니다. 연속 손실 3일 도달 시 포지션 크기 자동 축소 규칙 도입을 권장합니다.`});
+            if(maxW>=3)insights.push({c:'var(--green)',t:`🟢 최장 연승 ${maxW}일 기록 — 연승 구간에는 리스크를 합리적으로 활용하되, 과도한 레버리지 증가는 연승 종료 시 손실을 극대화할 수 있습니다.`});
+            // Breakeven WR
             const breakEvenWr=avgW2&&avgL2?Math.ceil(avgL2/(avgL2+avgW2)*100):null;
-            if(breakEvenWr&&wr2<breakEvenWr)insights.push({c:'rgba(255,180,0,.8)',t:`📐 현재 R:R 기준 손익분기 승률: ${breakEvenWr}% (현재 ${wr2}%). ${breakEvenWr-wr2}%p 개선 필요합니다.`});
-            if(jKelly>0)insights.push({c:jHalfKelly>=0.02?'var(--green)':'rgba(255,180,0,.8)',t:`📐 켈리 기준: 반 켈리 ${(jHalfKelly*100).toFixed(1)}%를 권장 포지션 크기로 사용하세요 (풀켈리 ${(jKelly*100).toFixed(1)}%의 절반). R:R=${jRR.toFixed(2)}`});
+            const breakEvenGap=breakEvenWr?breakEvenWr-wr2:0;
+            if(breakEvenWr&&wr2<breakEvenWr)insights.push({c:'rgba(255,180,0,.8)',t:`📐 손익분기 승률 ${breakEvenWr}% (현재 ${wr2}%, ${breakEvenGap}%p 미달). 손절 폭 축소 또는 목표 수익 확대로 R:R을 개선하면 동일 승률에서도 흑자 전환 가능합니다.`});
+            // Kelly
+            if(jKelly>0)insights.push({c:jHalfKelly>=0.02?'var(--green)':'rgba(255,180,0,.8)',t:`📐 켈리 기준 권장 포지션: 반 켈리 ${(jHalfKelly*100).toFixed(1)}% (풀켈리 ${(jKelly*100).toFixed(1)}%의 절반). R:R=${jRR.toFixed(2)} — 이 비율을 초과하면 장기적으로 자산이 감소할 수 있습니다.`});
+            // Day-of-week analysis
+            const KD2=['일','월','화','수','목','금','토'];
+            const ds2={};KD2.forEach(d=>{ds2[d]={n:0,win:0,pnl:0};});
+            jnlSorted.forEach(e=>{if(!e.date||+e.profit===0)return;const d=KD2[new Date(e.date+'T12:00:00').getDay()];ds2[d].n++;ds2[d].pnl+=+(e.profit||0);if(+e.profit>0)ds2[d].win++;});
+            const activeDays2=KD2.filter(d=>ds2[d].n>=3);
+            if(activeDays2.length>=2){
+              const bestD=activeDays2.reduce((a,b)=>ds2[b].win/ds2[b].n>ds2[a].win/ds2[a].n?b:a);
+              const worstD=activeDays2.reduce((a,b)=>ds2[b].win/ds2[b].n<ds2[a].win/ds2[a].n?b:a);
+              const bestWR=Math.round(ds2[bestD].win/ds2[bestD].n*100);
+              const worstWR=Math.round(ds2[worstD].win/ds2[worstD].n*100);
+              const bestAvg=+(ds2[bestD].pnl/ds2[bestD].n).toFixed(0);
+              const worstAvg=+(ds2[worstD].pnl/ds2[worstD].n).toFixed(0);
+              if(bestWR-worstWR>=20)insights.push({c:'rgba(100,180,255,.8)',t:`📅 요일별 격차: ${bestD}요일 승률 ${bestWR}% (평균 ${bestAvg>=0?'+':''}$${fmtN(Math.abs(bestAvg))}) vs ${worstD}요일 승률 ${worstWR}% (평균 ${worstAvg>=0?'+':''}$${fmtN(Math.abs(worstAvg))}). ${bestD}요일 진입을 우선시하고 ${worstD}요일은 포지션 축소 또는 관망을 검토하세요.`});
+            }
             return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid ${i.c};font-size:.84rem;line-height:1.6">${i.t}</div>`).join('');
           })()}
-        </div>`;
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-size:.74rem;color:var(--tx2)">🤖 Gemini AI 인사이트</div>
+          <input type="password" id="gemini-key-inp" placeholder="Gemini API Key (AIza...)" value="${localStorage.getItem('hb_gemini_key')||''}" style="flex:1;min-width:180px;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 9px;font-family:inherit;font-size:.78rem" onchange="localStorage.setItem('hb_gemini_key',this.value)">
+          <button class="btn btn-secondary btn-sm" onclick="genGeminiInsights()">✨ AI 분석 생성</button>
+        </div>
+        <div id="gemini-insights-out" style="margin-top:8px"></div>`;
     } else {
       jnlEl.innerHTML='';
     }
@@ -1198,6 +1194,65 @@ function renderDashboard(){
     ]);
   } else {
     CH['chart-equity-proj']?.destroy();
+  }
+}
+
+/* ── Gemini AI Insights ── */
+async function genGeminiInsights(){
+  const key=(localStorage.getItem('hb_gemini_key')||'').trim();
+  const out=document.getElementById('gemini-insights-out');
+  if(!key){out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">Gemini API Key를 입력해주세요. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">발급받기 →</a></div>`;return;}
+  out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ AI 분석 중...</div>`;
+  // Build context from current journal/trade data
+  const jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+  const active=jnlSorted.filter(e=>+e.profit!==0);
+  const jWin=active.filter(e=>+e.profit>0).length;
+  const jLoss=active.filter(e=>+e.profit<0).length;
+  const jWr=active.length?(jWin/active.length*100).toFixed(1):0;
+  const cumP=active.reduce((a,e)=>a+(+e.profit||0),0);
+  const jGrossW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
+  const jGrossL=Math.abs(active.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit||0),0));
+  const jAvgW=jWin?(jGrossW/jWin).toFixed(2):0;
+  const jAvgL=jLoss?(jGrossL/jLoss).toFixed(2):0;
+  const jPF=jGrossL?(jGrossW/jGrossL).toFixed(2):'∞';
+  const jEV=+(+jWr/100*+jAvgW-(1-+jWr/100)*+jAvgL).toFixed(2);
+  const latestSeed=+jnlSorted[jnlSorted.length-1]?.totalSeed||0;
+  // Day-of-week summary
+  const KD=['일','월','화','수','목','금','토'];
+  const ds={};KD.forEach(d=>{ds[d]={n:0,win:0,pnl:0};});
+  active.forEach(e=>{const d=KD[new Date(e.date+'T12:00:00').getDay()];ds[d].n++;ds[d].pnl+=+(e.profit||0);if(+e.profit>0)ds[d].win++;});
+  const dayStats=KD.filter(d=>ds[d].n>0).map(d=>`${d}요일: ${ds[d].n}일, 승률${Math.round(ds[d].win/ds[d].n*100)}%, 평균$${(ds[d].pnl/ds[d].n).toFixed(0)}`).join(' | ');
+  // Monthly summary (last 3 months)
+  const byM={};active.forEach(e=>{const m=e.date?.slice(0,7);if(!m)return;if(!byM[m])byM[m]={n:0,p:0};byM[m].n++;byM[m].p+=+e.profit||0;});
+  const mSummary=Object.entries(byM).sort(([a],[b])=>b>a?1:-1).slice(0,3).map(([m,v])=>`${m}: ${v.n}일 ${v.p>=0?'+':''}$${(v.p).toFixed(0)}`).join(', ');
+  const prompt=`당신은 전문 트레이딩 코치입니다. 아래는 한국 암호화폐 트레이더의 매매일지 통계입니다. 한국어로 구체적이고 실용적인 인사이트 4~6개를 제공하세요. 각 인사이트는 데이터 근거를 포함하고, 실행 가능한 개선 방법을 제안하세요.
+
+[통계 요약]
+- 총 거래일: ${active.length}일 (수익${jWin}일, 손실${jLoss}일)
+- 일간 승률: ${jWr}%
+- 누적 수익금: $${cumP.toFixed(0)}
+- 평균 수익일: +$${jAvgW} / 평균 손실일: -$${jAvgL}
+- 손익비(P-Factor): ${jPF}
+- 거래당 기대값(EV): ${jEV>=0?'+':''}$${jEV}
+- 현재 시드: $${fmtN(latestSeed)}
+- 요일별 패턴: ${dayStats}
+- 최근 3개월: ${mSummary}
+
+[형식] 각 인사이트는 이모지 + 제목: 설명 형태로 작성. 마크다운 없이 일반 텍스트로.`;
+
+  try{
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:1200}})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.statusText);}
+    const data=await resp.json();
+    const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'응답 없음';
+    // Split into individual insights by newline
+    const lines=text.split('\n').map(s=>s.trim()).filter(s=>s.length>10);
+    out.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">${lines.map(l=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid rgba(100,180,255,.7);font-size:.84rem;line-height:1.6">${l.replace(/</g,'&lt;')}</div>`).join('')}</div>`;
+  }catch(e){
+    out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">오류: ${e.message.replace(/</g,'&lt;')}</div>`;
   }
 }
 
@@ -2700,7 +2755,8 @@ function mkLine(id,labels,data){
 }
 function mkDonut(id,wins,losses){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
-  CH[id]=new Chart(ctx,{type:'doughnut',data:{labels:['승','패'],datasets:[{data:[wins,losses],backgroundColor:['rgba(76,175,122,.8)','rgba(207,102,121,.8)'],borderWidth:0}]},options:{animation:{duration:0},responsive:true,plugins:{legend:{labels:{color:txDim(),font:{size:11}}}}}});
+  // rotation=180 → starts at 9-o'clock (left); wins(green) arc starts from left going clockwise → green on left
+  CH[id]=new Chart(ctx,{type:'doughnut',data:{labels:['승','패'],datasets:[{data:[wins,losses],backgroundColor:['rgba(76,175,122,.8)','rgba(207,102,121,.8)'],borderWidth:0}]},options:{animation:{duration:0},responsive:true,rotation:180,plugins:{legend:{labels:{color:txDim(),font:{size:11}}}}}});
 }
 function mkMultiLine(id,labels,datasets){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
