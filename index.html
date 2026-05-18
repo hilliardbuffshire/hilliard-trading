@@ -413,13 +413,16 @@
       <div id="dash-alert"></div>
       <div class="stat-grid" id="dash-stats"></div>
       <div id="dash-jnl-stats"></div>
-      <div class="chart-row">
-        <div class="chart-card"><h3>누적 수익률 추이</h3><canvas id="chart-cumulative"></canvas></div>
-        <div class="chart-card"><h3>승률</h3><canvas id="chart-winrate"></canvas></div>
+      <div class="chart-row" style="margin-bottom:16px">
+        <div class="chart-card" style="flex:2"><h3>📈 시드 변화 추이 <span style="font-size:.72rem;color:var(--tx2)">(총시드 $ · 대시선 = 역대 최고점)</span></h3><canvas id="chart-seed-curve"></canvas></div>
+        <div class="chart-card" style="flex:1"><h3>승률</h3><canvas id="chart-winrate"></canvas></div>
       </div>
-      <div class="chart-card" style="margin-bottom:16px"><h3>📈 시드 변화 추이 (총시드 $)</h3><canvas id="chart-seed-curve"></canvas></div>
       <div class="chart-row" style="margin-bottom:22px">
-        <div class="chart-card"><h3>📊 롤링 승률 추세 <span style="font-size:.72rem;color:var(--tx2)">(20일 이동평균)</span></h3><canvas id="chart-rolling-wr"></canvas></div>
+        <div class="chart-card">
+          <h3>📊 롤링 승률 추세 <span style="font-size:.72rem;color:var(--tx2)">(20거래일 이동평균)</span></h3>
+          <p style="font-size:.74rem;color:var(--tx2);margin-bottom:10px;line-height:1.55">최근 20거래일의 승률을 날짜별로 집계한 이동평균 차트입니다. 값이 50% 기준선(점선) 위면 최근 구간이 수익 우세, 아래면 손실 우세를 의미합니다. 단기 추세 변화와 심리적 모멘텀을 파악하는 데 활용하세요.</p>
+          <canvas id="chart-rolling-wr"></canvas>
+        </div>
         <div class="chart-card"><h3>🔮 미래 시드 추정 <span style="font-size:.72rem;color:var(--tx2)">(60일, 최근 30일 EV 기반)</span></h3><canvas id="chart-equity-proj"></canvas></div>
       </div>
       <div class="table-card">
@@ -1062,7 +1065,7 @@ function renderDashboard(){
             else if(wr2<50)insights.push({c:'rgba(255,180,0,.8)',t:`⚠️ 승률 ${wr2}%로 50% 미만입니다. 수익일 평균 $${fmtN(avgW2)}이 손실일 평균 $${fmtN(avgL2)}보다 ${avgW2>=avgL2?'크기 때문에 손익분기점 유지는 가능하지만, 손실일이 더 많아 주의가 필요합니다.':'작아 이중 불리한 구조입니다.'}`});
             else insights.push({c:'var(--green)',t:`✅ 승률 ${wr2}%로 양호합니다. 수익일 평균 $${fmtN(avgW2)} / 손실일 평균 $${fmtN(avgL2)}.`});
             // P-Factor
-            if(pf!==null&&pf<1){const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);insights.push({c:'var(--red)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현 R:R 유지 시 손익분기 최소 승률은 ${needWr}% (현재 ${wr2}%, ${breakEvenGap=needWr-wr2}%p 미달).`});}
+            if(pf!==null&&pf<1){const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);insights.push({c:'var(--red)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현 R:R 유지 시 손익분기 최소 승률은 ${needWr}% (현재 ${wr2}%, ${needWr-wr2}%p 미달).`});}
             else if(pf!==null)insights.push({c:'var(--green)',t:`💰 손익비 P-Factor ${jPF} ≥ 1로 양호합니다. 수익 구조가 손실 구조보다 큽니다.`});
             // Streak
             if(curLossStreak>=3)insights.push({c:'var(--red)',t:`🔴 현재 연속 손실 ${curLossStreak}일 진행 중입니다. 즉시 포지션 크기를 50% 이하로 줄이고 전략 일관성을 점검하세요.`});
@@ -1124,7 +1127,6 @@ function renderDashboard(){
       <td class="${+avg>=0?'pos':'neg'} tt" data-tip="평균 손익 = 월 손익 합계(${d.pnl.toFixed(2)}%) ÷ 매매 수(${total})">${avg}%</td>
     </tr>`;
   }).join('')||`<tr><td colspan="7" class="empty">기록 없음</td></tr>`;
-  mkLine('chart-cumulative',trades.map(t=>t.date),trades.map(t=>+t.cumulative||0));
   mkDonut('chart-winrate',wins.length,losses.length);
   // Seed curve + running peak line (MDD zone visualization)
   const _seedRows=[...journal].filter(e=>+e.totalSeed>0).sort((a,b)=>a.date>b.date?1:-1);
