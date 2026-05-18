@@ -351,6 +351,8 @@
     .ai-q-chip:hover{border-color:var(--ac);color:var(--ac)}
     #ai-inp{flex:1;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;color:var(--tx);padding:8px 11px;font-family:inherit;font-size:.84rem;outline:none;resize:none;line-height:1.4}
     #ai-inp:focus{border-color:var(--ac)}
+    #ai-resize-grip{position:absolute;top:4px;left:4px;width:16px;height:16px;cursor:nw-resize;opacity:.25;transition:opacity .15s;background:radial-gradient(circle,var(--tx2) 1.5px,transparent 1.5px) 0 0/5px 5px;border-radius:16px 0 0 0;z-index:1}
+    #ai-resize-grip:hover{opacity:.75}
 
   </style>
 </head>
@@ -1182,6 +1184,7 @@ let _aiOpen=false;
 function toggleAiChat(){
   _aiOpen=!_aiOpen;
   document.getElementById('ai-panel')?.classList.toggle('open',_aiOpen);
+  localStorage.setItem('hb_ai_open',_aiOpen?'1':'0');
   if(_aiOpen){setTimeout(()=>document.getElementById('ai-inp')?.focus(),220);}
 }
 
@@ -1255,7 +1258,11 @@ function buildTradingCtx(){
 [트레이딩 데이터] 총거래일:${active.length}일 승률:${jWr}% 수익일:${jWin} 손실일:${jLoss} 평균수익:$${avgW} 평균손실:$${avgL} P-Factor:${pf} EV:${ev>=0?'+':''}$${ev} 현재시드:$${fmtN(seed)} 연속손실:${streak}일 요일패턴:[${dayStats||'없음'}] 최근3개월:[${mS||'없음'}]`;
 }
 
-function renderAiMsgs(){
+function saveAiMsgs(){
+  try{localStorage.setItem('hb_ai_msgs',JSON.stringify(_aiMsgs.filter(m=>!m.thinking).slice(-40)));}catch(e){}
+}
+
+function renderAiMsgs(persist){
   const box=document.getElementById('ai-panel-msgs');
   if(!box)return;
   if(!_aiMsgs.length){
@@ -1264,6 +1271,36 @@ function renderAiMsgs(){
   }
   box.innerHTML=_aiMsgs.map(m=>`<div class="ai-msg-${m.role==='user'?'u':'a'}${m.thinking?' thinking':''}">${m.text.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`).join('');
   box.scrollTop=box.scrollHeight;
+  if(persist!==false)saveAiMsgs();
+}
+
+function initPanelResize(){
+  const panel=document.getElementById('ai-panel');
+  const grip=document.getElementById('ai-resize-grip');
+  if(!panel||!grip)return;
+  // Restore saved size
+  try{
+    const s=JSON.parse(localStorage.getItem('hb_ai_size')||'null');
+    if(s?.w)panel.style.width=s.w+'px';
+    if(s?.h)panel.style.maxHeight=s.h+'px';
+  }catch(e){}
+  let drag=false,sx,sy,sw,sh;
+  grip.addEventListener('mousedown',e=>{
+    if(panel.classList.contains('expanded'))return;
+    e.preventDefault();drag=true;
+    sx=e.clientX;sy=e.clientY;sw=panel.offsetWidth;sh=panel.offsetHeight;
+    document.body.style.userSelect='none';
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag)return;
+    const nw=Math.max(320,Math.min(1000,sw+(sx-e.clientX)));
+    const nh=Math.max(380,Math.min(Math.round(window.innerHeight*.92),sh+(sy-e.clientY)));
+    panel.style.width=nw+'px';panel.style.maxHeight=nh+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!drag)return;drag=false;document.body.style.userSelect='';
+    localStorage.setItem('hb_ai_size',JSON.stringify({w:panel.offsetWidth,h:panel.offsetHeight}));
+  });
 }
 
 async function sendAiMsg(text){
@@ -1304,13 +1341,22 @@ async function sendAiMsg(text){
 }
 
 function initAiPanel(){
+  // Restore saved messages
+  try{const saved=JSON.parse(localStorage.getItem('hb_ai_msgs')||'[]');if(Array.isArray(saved))_aiMsgs=saved;}catch(e){}
+  // Restore open state
+  _aiOpen=localStorage.getItem('hb_ai_open')==='1';
+  document.getElementById('ai-panel')?.classList.toggle('open',_aiOpen);
+  // Key + model
   const key=localStorage.getItem('hb_ai_key')||'';
   const keyInp=document.getElementById('ai-key-inp');
   if(keyInp){keyInp.value=key;}
   const ind=document.getElementById('ai-model-ind');
   if(ind)ind.textContent=_aiModel;
   if(key)detectAiModel(key);
-  renderAiMsgs();
+  // Render messages (no persist call needed on load)
+  renderAiMsgs(false);
+  // Resize
+  initPanelResize();
   const inp=document.getElementById('ai-inp');
   if(inp){inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAiMsg();}});}
 }
@@ -3126,6 +3172,7 @@ window.undoImport=async function(){
   const panel=document.createElement('div');
   panel.id='ai-panel';
   panel.innerHTML=`
+    <div id="ai-resize-grip" title="드래그하여 크기 조절"></div>
     <div id="ai-panel-hd">
       <span style="font-size:1.1rem">🤖</span>
       <span style="font-weight:600;font-size:.9rem;flex:1">AI 트레이딩 코치</span>
