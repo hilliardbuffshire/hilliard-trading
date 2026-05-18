@@ -889,20 +889,21 @@ function renderDashboard(){
   const wr=n?(wins.length/n*100).toFixed(1):0;
   const cum=n?+(trades[n-1]?.cumulative||0):0;
   const avgP=n?(trades.reduce((a,t)=>a+(+t.pnl||0),0)/n).toFixed(2):0;
-  let peak=0,mdd=0,mddDate='';
-  trades.forEach(t=>{
-    const v=+t.cumulative||0;
-    if(v>peak)peak=v;
-    const dd=peak-v;
-    if(dd>mdd){mdd=dd;mddDate=t.date;}
-  });
+  // Compound equity MDD from trades (fallback when no journal)
+  let eq=100,eqPk=100,tradeMdd=0,tradeMddDate='';
+  trades.forEach(t=>{eq=+(eq*(1+(+t.pnl||0)/100)).toFixed(6);if(eq>eqPk)eqPk=eq;const dd=(eqPk-eq)/eqPk*100;if(dd>tradeMdd){tradeMdd=dd;tradeMddDate=t.date;}});
   const avgWin=wins.length?(wins.reduce((a,t)=>a+(+t.pnl||0),0)/wins.length).toFixed(2):0;
   const avgLoss=losses.length?(losses.reduce((a,t)=>a+(+t.pnl||0),0)/losses.length).toFixed(2):0;
   const grossW=wins.reduce((a,t)=>a+(+t.pnl||0),0);
   const grossL=Math.abs(losses.reduce((a,t)=>a+(+t.pnl||0),0));
   const pf=grossL?(grossW/grossL).toFixed(2):wins.length?'∞':'—';
-  // Journal quick stats (top row)
+  // Journal stats (computed early so available for top stats)
   const jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+  // Seed-based MDD from journal (accurate: (peak_seed - current_seed) / peak_seed)
+  let sp=0,smdd=0,smddDate='';
+  jnlSorted.forEach(e=>{const s=+e.totalSeed||0;if(!s)return;if(s>sp)sp=s;if(sp>0){const dd=(sp-s)/sp*100;if(dd>smdd){smdd=dd;smddDate=e.date;}}});
+  const mdd=journal.length?smdd:tradeMdd;
+  const mddDate=journal.length?smddDate:tradeMddDate;
   const latestJnl=jnlSorted[jnlSorted.length-1];
   const curSeed=latestJnl?.totalSeed||0;
   const curM=new Date().toISOString().slice(0,7);
@@ -930,17 +931,16 @@ function renderDashboard(){
       const jWr=active.length?(jWin/active.length*100).toFixed(1):0;
       const cumP=active.reduce((a,e)=>a+(+e.profit||0),0);
       const avgDP=active.length?(cumP/active.length).toFixed(2):0;
-      // MDD from totalSeed curve
-      let sp=0,smdd=0;
-      jnlSorted.forEach(e=>{const s=+e.totalSeed||0;if(!s)return;if(s>sp)sp=s;if(sp>0){const dd=(sp-s)/sp*100;if(dd>smdd)smdd=dd;}});
-      // Win / loss streaks
-      let streak=0,maxW=0,maxL=0,sType=null;
+      // smdd/smddDate already computed above (seed-based MDD)
+      // Win / loss streaks with date ranges
+      let streak=0,maxW=0,maxL=0,sType=null,curSt='',curEn='';
+      let wStart='',wEnd='',lStart='',lEnd='';
       jnlSorted.forEach(e=>{
         const p=+e.profit||0;if(!p)return;
         const t=p>0?'w':'l';
-        if(t===sType)streak++;else{streak=1;sType=t;}
-        if(t==='w'&&streak>maxW)maxW=streak;
-        if(t==='l'&&streak>maxL)maxL=streak;
+        if(t===sType){streak++;curEn=e.date;}else{streak=1;sType=t;curSt=e.date;curEn=e.date;}
+        if(t==='w'&&streak>maxW){maxW=streak;wStart=curSt;wEnd=curEn;}
+        if(t==='l'&&streak>maxL){maxL=streak;lStart=curSt;lEnd=curEn;}
       });
       // Best month
       const jGrossW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
@@ -956,9 +956,9 @@ function renderDashboard(){
           <div class="stat-card ${+jWr>=50?'c-green':'c-red'}"><div class="stat-label">일간 승률</div><div class="stat-value">${jWr}%</div></div>
           <div class="stat-card ${cumP>=0?'c-green':'c-red'}"><div class="stat-label">누적 수익금</div><div class="stat-value ${cumP>=0?'pos':'neg'}">${cumP>=0?'+':'-'}$${fmtN(Math.abs(cumP))}</div></div>
           <div class="stat-card"><div class="stat-label">일평균 손익</div><div class="stat-value ${+avgDP>=0?'pos':'neg'}">${+avgDP>=0?'+':'-'}$${Math.abs(avgDP)}</div></div>
-          <div class="stat-card c-red"><div class="stat-label">시드 MDD</div><div class="stat-value">-${smdd.toFixed(2)}%</div></div>
-          <div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">${maxW}일</div></div>
-          <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div></div>
+          <div class="stat-card c-red"><div class="stat-label">시드 MDD</div><div class="stat-value">-${smdd.toFixed(2)}%</div>${smddDate?`<div class="stat-sub">${smddDate}</div>`:''}</div>
+          <div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">${maxW}일</div>${wStart?`<div class="stat-sub">${wStart}~${wEnd.slice(5)}</div>`:''}</div>
+          <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div>${lStart?`<div class="stat-sub">${lStart}~${lEnd.slice(5)}</div>`:''}</div>
           <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
           <div class="stat-card"><div class="stat-label">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$${fmtN(jAvgW)}</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$${fmtN(jAvgL)}</span></div><div class="stat-sub">수익${jWin}일 · 손실${jLoss}일</div></div>
         </div>
@@ -1090,7 +1090,8 @@ const JNL_COLS=[
   {key:'personalPnl',   label:'개인손익',    fmt:'pnl',
     get:e=>e.personalPnl,
     upd:v=>({personalPnl:+v||0})},
-  {key:'personalCumPnl',label:'개인누적',    fmt:'pnl',
+  {key:'personalCumPnl',label:'개인누적',    fmt:'pnl', autoFill:true,
+    autoFillDesc:'전일 개인누적 + 오늘 개인손익 자동계산',
     get:e=>e.personalCumPnl,
     upd:v=>({personalCumPnl:+v||0})},
   {key:'stopAlert',     label:'강제종료',    fmt:'stop',
@@ -1341,6 +1342,9 @@ window.jnlEdit=function(span){
       const freshVal=isDate?newRaw:col.get(entry);
       span.innerHTML=isDate?(freshVal||'<span style="opacity:.35">—</span>'):jnlFmt(freshVal,col.fmt);
       span.dataset.val=String(freshVal??'');
+      // Pre-sort journal once for all auto-compute + carry-forward blocks
+      const _jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+      const _idx=_jnlSorted.findIndex(e=>e.id===id);
       // ── Auto-compute totalSeed = (upbit.close + bithumb.close) / tether + binance.close ──
       const _tsDeps=['upbit','bithumb','binance','tether'];
       let _newTS=null;
@@ -1392,9 +1396,19 @@ window.jnlEdit=function(span){
           }
         }
       }
+      // ── Auto-compute personalCumPnl = prev.personalCumPnl + personalPnl ──
+      if(key==='personalPnl'&&!isDate){
+        const prevE=_idx>0?_jnlSorted[_idx-1]:null;
+        const prevCum=prevE?+prevE.personalCumPnl||0:0;
+        const _newPC=+(prevCum+(+entry.personalPnl||0)).toFixed(4);
+        if(Math.abs(_newPC-(+entry.personalCumPnl||0))>0.001){
+          entry.personalCumPnl=_newPC;
+          await db.collection('trading_journal').doc(id).update({personalCumPnl:_newPC});
+          const pcSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="personalCumPnl"]');
+          if(pcSpan){pcSpan.innerHTML=jnlFmt(_newPC,'pnl');pcSpan.dataset.val=String(_newPC);}
+        }
+      }
       // ── Carry-forward: close→next open, totalSeed→next seedStart, totalSeed→next profit ──
-      const _jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
-      const _idx=_jnlSorted.findIndex(e=>e.id===id);
       const _nextE=_idx>=0?_jnlSorted[_idx+1]:null;
       if(_nextE){
         const nextUpdate={};let nextDomUpdates=[];
@@ -1402,6 +1416,15 @@ window.jnlEdit=function(span){
         if(key==='upbit'){nextUpdate['exchanges.upbit.open']=+newRaw||0;nextDomUpdates.push({key:'upbitOpen',val:+newRaw||0});}
         else if(key==='bithumb'){nextUpdate['exchanges.bithumb.open']=+newRaw||0;nextDomUpdates.push({key:'bithumbOpen',val:+newRaw||0});}
         else if(key==='binance'){nextUpdate['exchanges.binance.open']=+newRaw||0;nextDomUpdates.push({key:'binanceOpen',val:+newRaw||0});}
+        // personalCumPnl → next personalCumPnl
+        const _pcToCarry=key==='personalCumPnl'?+newRaw||0:(key==='personalPnl'?+entry.personalCumPnl||0:null);
+        if(_pcToCarry!==null){
+          const nextCumPc=+(_pcToCarry+(+_nextE.personalPnl||0)).toFixed(4);
+          if(Math.abs(nextCumPc-(+_nextE.personalCumPnl||0))>0.001){
+            nextUpdate.personalCumPnl=nextCumPc;_nextE.personalCumPnl=nextCumPc;
+            nextDomUpdates.push({key:'personalCumPnl',val:nextCumPc});
+          }
+        }
         // totalSeed (manual or auto-computed) → next seedStart
         const carryTS=_newTS!==null?_newTS:(key==='totalSeed'?+newRaw||0:null);
         if(carryTS!==null){
@@ -1532,7 +1555,7 @@ window.addJnlRow=async function(){
     },
     seedStart:prev?.totalSeed||0,
     totalSeed:0,profit:0,rate:0,tether,
-    cashFlow:0,personalPnl:0,personalCumPnl:0,stopAlert:'',memo:'',
+    cashFlow:0,personalPnl:0,personalCumPnl:prev?.personalCumPnl||0,stopAlert:'',memo:'',
     userId:getCurUid(),createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   try{
