@@ -1463,18 +1463,28 @@ window.jnlEdit=function(span){
 };
 
 window.importJournalAsTrades=async function(){
-  const active=journal.filter(e=>+e.rate!==0&&e.date);
-  if(!active.length){toast('변환할 일지 데이터 없음','err');return;}
-  if(!confirm(`매매일지 ${active.length}건을 매매기록(BTCUSDT)으로 변환합니다.\n기존 BTCUSDT 일지 변환 기록은 덮어쓰지 않습니다. 계속하시겠습니까?`))return;
+  const active=journal.filter(e=>+e.profit!==0&&e.date);
+  if(!active.length){toast('변환할 일지 데이터 없음 (수익금이 0이 아닌 항목 기준)','err');return;}
+  if(!confirm(`매매일지 ${active.length}건을 매매기록(BTCUSDT)으로 변환합니다.\n기존 일지 변환 기록을 먼저 삭제 후 새로 삽입합니다. 계속하시겠습니까?`))return;
   const KD=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
   const uid=getCurUid();
+  toast('기존 일지 변환 기록 삭제 중…','ok');
+  // Delete existing [일지 기반] BTCUSDT trades for this user
+  const existing=await db.collection('trading_trades')
+    .where('userId','==',uid).where('symbol','==','BTCUSDT').get();
+  const toDelete=existing.docs.filter(d=>{const m=d.data().memo||'';return m.startsWith('[일지]')||m==='[일지 기반]';});
+  for(let i=0;i<toDelete.length;i+=500){
+    const b=db.batch();
+    toDelete.slice(i,i+500).forEach(d=>b.delete(d.ref));
+    await b.commit();
+  }
   let written=0;
   toast(`${active.length}건 변환 중…`,'ok');
   const CHUNK=500;
   for(let i=0;i<active.length;i+=CHUNK){
     const b=db.batch();
     active.slice(i,i+CHUNK).forEach(e=>{
-      const pnl=+e.rate||0;
+      const pnl=+e.rate||(+e.seedStart?+((+e.profit/+e.seedStart)*100).toFixed(4):0);
       const dayLabel=KD[new Date(e.date+'T12:00:00').getDay()];
       const ref=db.collection('trading_trades').doc();
       b.set(ref,{
