@@ -441,7 +441,6 @@
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="jnl-count-badge" style="font-size:.78rem;color:var(--tx2)"></span>
           <button class="btn btn-secondary btn-sm" onclick="addJnlCol()">＋ 열 추가</button>
-          <button class="btn btn-secondary btn-sm" onclick="fillMissingTether()" title="환율 미기입 행에 자동으로 테더 채우기">⚡ 테더 일괄입력</button>
           <button class="btn btn-secondary btn-sm" onclick="exportJournalXLSX()">📊 엑셀 내보내기</button>
           <button class="btn btn-secondary btn-sm" onclick="openImportModal('journal')">📥 가져오기</button>
           <button class="btn btn-primary btn-sm" onclick="addJnlRow()">+ 행 추가</button>
@@ -891,7 +890,7 @@ function renderDashboard(){
       const avgDP=active.length?(cumP/active.length).toFixed(2):0;
       // MDD from totalSeed curve
       let sp=0,smdd=0;
-      jnlSorted.forEach(e=>{const s=+e.totalSeed||0;if(s>sp)sp=s;if(sp>0){const dd=(sp-s)/sp*100;if(dd>smdd)smdd=dd;}});
+      jnlSorted.forEach(e=>{const s=+e.totalSeed||0;if(!s)return;if(s>sp)sp=s;if(sp>0){const dd=(sp-s)/sp*100;if(dd>smdd)smdd=dd;}});
       // Win / loss streaks
       let streak=0,maxW=0,maxL=0,sType=null;
       jnlSorted.forEach(e=>{
@@ -920,6 +919,48 @@ function renderDashboard(){
           <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div></div>
           <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
           <div class="stat-card"><div class="stat-label">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$${fmtN(jAvgW)}</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$${fmtN(jAvgL)}</span></div><div class="stat-sub">수익${jWin}일 · 손실${jLoss}일</div></div>
+        </div>
+        <div class="section-label" style="margin-top:18px;margin-bottom:8px">📅 요일별 수익 패턴</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${(()=>{
+            const KD=['일','월','화','수','목','금','토'];
+            const ds={};KD.forEach(d=>{ds[d]={n:0,win:0,pnl:0};});
+            jnlSorted.forEach(e=>{
+              if(!e.date||+e.profit===0)return;
+              const d=KD[new Date(e.date+'T12:00:00').getDay()];
+              ds[d].n++;ds[d].pnl+=+(e.profit||0);if(+e.profit>0)ds[d].win++;
+            });
+            return KD.filter(d=>ds[d].n>0).map(d=>{
+              const wr2=Math.round(ds[d].win/ds[d].n*100);
+              const avg2=+(ds[d].pnl/ds[d].n).toFixed(1);
+              const cls=wr2>=50?'pos':'neg';
+              return`<div style="background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center;min-width:52px;flex:1">
+                <div style="font-size:.65rem;color:var(--tx2);margin-bottom:2px">${d}요일</div>
+                <div style="font-size:.80rem;font-weight:700" class="${cls}">${wr2}%</div>
+                <div style="font-size:.60rem;color:var(--tx2)">${ds[d].n}일</div>
+                <div style="font-size:.60rem" class="${avg2>=0?'pos':'neg'}">${avg2>=0?'+':'-'}$${fmtN(Math.abs(avg2))}</div>
+              </div>`;
+            }).join('');
+          })()}
+        </div>
+        <div class="section-label" style="margin-top:18px;margin-bottom:8px">💡 매매 분석 인사이트</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          ${(()=>{
+            const insights=[];
+            const wr2=+jWr,pf=isNaN(+jPF)?null:+jPF,avgW2=+jAvgW,avgL2=+jAvgL;
+            if(wr2<40)insights.push({c:'var(--neg)',t:`📉 일간 승률 ${wr2}%로 매우 낮습니다. 수익일(${jWin}일)보다 손실일(${jLoss}일)이 ${jLoss-jWin}일 더 많습니다. 진입 타이밍과 포지션 관리 전략 검토가 필요합니다.`});
+            else if(wr2<50)insights.push({c:'rgba(255,180,0,.8)',t:`⚠️ 승률 ${wr2}%로 50% 미만입니다. 수익일 평균이 $${fmtN(avgW2)}로 손실일 평균($${fmtN(avgL2)})보다 ${avgW2>=avgL2?'크지만':'작고'} 손실일 수가 더 많아 전체 손실 중입니다.`});
+            else insights.push({c:'var(--pos)',t:`✅ 승률 ${wr2}%로 양호합니다.`});
+            if(pf!==null&&pf<1){
+              const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);
+              insights.push({c:'var(--neg)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현재 수익/손실 평균 비율을 유지하려면 승률이 최소 ${needWr}% 이상이어야 손익분기점에 도달합니다 (현재 ${wr2}%).`});
+            }else if(pf!==null)insights.push({c:'var(--pos)',t:`💰 손익비 ${jPF}로 수익/손실 비율이 양호합니다.`});
+            if(maxL>=5)insights.push({c:'var(--neg)',t:`🔴 최장 연속 손실 ${maxL}일은 위험 신호입니다. 연속 손실 3일 이후 포지션 크기 축소 규칙 도입을 권장합니다.`});
+            if(maxW>=3)insights.push({c:'var(--pos)',t:`🟢 최장 연승 ${maxW}일은 상승 모멘텀이 있음을 시사합니다. 연승 기간에는 리스크를 적절히 활용하되 과도한 레버리지는 주의하세요.`});
+            const breakEvenWr=avgW2&&avgL2?Math.ceil(avgL2/(avgL2+avgW2)*100):null;
+            if(breakEvenWr&&wr2<breakEvenWr)insights.push({c:'rgba(255,180,0,.8)',t:`📐 현재 R:R 기준 손익분기 승률: ${breakEvenWr}% (현재 ${wr2}%). ${breakEvenWr-wr2}%p 개선 필요합니다.`});
+            return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:9px 12px;border-left:3px solid ${i.c};font-size:.78rem;line-height:1.55">${i.t}</div>`).join('');
+          })()}
         </div>`;
     } else {
       jnlEl.innerHTML='';
@@ -981,14 +1022,16 @@ const JNL_COLS=[
     autoFillDesc:'JSDelivr CDN USD/KRW 날짜별 자동조회',
     get:e=>e.tether,
     upd:v=>({tether:+v||0})},
-  {key:'totalSeed',     label:'총시드($)',   fmt:'usd',
+  {key:'totalSeed',     label:'총시드($)',   fmt:'usd', autoFill:true,
+    autoFillDesc:'(업비트마감+빗썸마감)/테더+퓨쳐스마감 자동계산',
     get:e=>e.totalSeed,
     upd:v=>({totalSeed:+v||0})},
   {key:'krwSeed',       label:'원화시드(₩)', fmt:'krw', readonly:true,
     autoFillDesc:'총시드 × 테더 자동계산 (읽기전용)',
     computed:e=>{const s=+e.totalSeed||0,t=+e.tether||0;return s&&t?Math.round(s*t):null;}},
   // P&L (Col J, K, N, O, P)
-  {key:'profit',        label:'수익금($)',   fmt:'pnl',
+  {key:'profit',        label:'수익금($)',   fmt:'pnl', autoFill:true,
+    autoFillDesc:'총시드 - 전일 총시드(시드시작) 자동계산',
     get:e=>e.profit,
     upd:v=>({profit:+v||0})},
   {key:'rate',          label:'수익률',      fmt:'pct',
@@ -1223,49 +1266,84 @@ window.jnlEdit=function(span){
       const freshVal=isDate?newRaw:col.get(entry);
       span.innerHTML=isDate?(freshVal||'<span style="opacity:.35">—</span>'):jnlFmt(freshVal,col.fmt);
       span.dataset.val=String(freshVal??'');
-      // refresh computed cell in same row (krwSeed depends on totalSeed/tether)
-      if(key==='totalSeed'||key==='tether'){
+      // ── Auto-compute totalSeed = (upbit.close + bithumb.close) / tether + binance.close ──
+      const _tsDeps=['upbit','bithumb','binance','tether'];
+      let _newTS=null;
+      if(_tsDeps.includes(key)&&!isDate){
+        const ub=+entry.exchanges?.upbit?.close||0,bh=+entry.exchanges?.bithumb?.close||0;
+        const bn=+entry.exchanges?.binance?.close||0,tt=+entry.tether||0;
+        if(tt>0&&(ub||bh||bn)){
+          _newTS=+((ub+bh)/tt+bn).toFixed(4);
+          if(Math.abs(_newTS-(+entry.totalSeed||0))>0.001){
+            entry.totalSeed=_newTS;
+            await db.collection('trading_journal').doc(id).update({totalSeed:_newTS});
+            const tsSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="totalSeed"]');
+            if(tsSpan){tsSpan.innerHTML=jnlFmt(_newTS,'usd');tsSpan.dataset.val=String(_newTS);}
+          }
+        }
+      }
+      // ── Refresh krwSeed (depends on totalSeed or tether) ──
+      if(key==='totalSeed'||key==='tether'||_newTS!==null){
         const row=span.closest('tr');
         if(row){const comp=row.querySelector('.jnl-computed');
           if(comp){const krwCol=JNL_COLS.find(c=>c.key==='krwSeed');
             if(krwCol?.computed){const v=krwCol.computed(entry);comp.innerHTML=v!=null?jnlFmt(v,'krw'):'<span style="opacity:.35">—</span>';}}}
       }
-      // carry-forward: propagate close→open / totalSeed→seedStart to next row
-      const carryMap={upbit:'upbitOpen',bithumb:'bithumbOpen',binance:'binanceOpen',totalSeed:'seedStart'};
-      if(carryMap[key]){
-        const sorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
-        const idx=sorted.findIndex(e=>e.id===id);
-        const nextEntry=idx>=0?sorted[idx+1]:null;
-        if(nextEntry){
-          let nextUpdate={};
-          let nextLocalKey=null;
-          if(key==='upbit'){nextUpdate={'exchanges.upbit.open':+newRaw||0};nextLocalKey='upbitOpen';}
-          else if(key==='bithumb'){nextUpdate={'exchanges.bithumb.open':+newRaw||0};nextLocalKey='bithumbOpen';}
-          else if(key==='binance'){nextUpdate={'exchanges.binance.open':+newRaw||0};nextLocalKey='binanceOpen';}
-          else if(key==='totalSeed'){nextUpdate={seedStart:+newRaw||0};nextLocalKey='seedStart';}
-          if(Object.keys(nextUpdate).length){
-            try{
-              await db.collection('trading_journal').doc(nextEntry.id).update(nextUpdate);
-              // update local journal object
-              for(const[k,v]of Object.entries(nextUpdate)){
-                if(k.includes('.')){const p=k.split('.');
-                  if(p.length===3)nextEntry[p[0]]={...nextEntry[p[0]],[p[1]]:{...(nextEntry[p[0]]?.[p[1]]||{}),[p[2]]:v}};
-                  else if(p.length===2)nextEntry[p[0]]={...nextEntry[p[0]],[p[1]]:v};
-                }else nextEntry[k]=v;
-              }
-              // update DOM cell in next row
-              const nextTr=document.querySelector(`#jnl-sheet-body tr[data-id="${nextEntry.id}"]`);
-              if(nextTr){
-                const nextSpan=nextTr.querySelector(`.jnl-cell-view[data-key="${nextLocalKey}"]`);
-                if(nextSpan){
-                  const nextCol=JNL_COLS.find(c=>c.key===nextLocalKey);
-                  const nv=nextCol?.get(nextEntry);
-                  nextSpan.innerHTML=jnlFmt(nv,nextCol?.fmt);
-                  nextSpan.dataset.val=String(nv??'');
-                }
-              }
-            }catch(e){console.error('carry-forward 실패',e);}
+      // ── Auto-compute profit = totalSeed - seedStart ──
+      const _pDeps=['upbit','bithumb','binance','tether','totalSeed','seedStart'];
+      if((_pDeps.includes(key)&&!isDate)||_newTS!==null){
+        const ts=+entry.totalSeed||0,ss=+entry.seedStart||0;
+        if(ts&&ss){
+          const _newP=+(ts-ss).toFixed(4);
+          if(Math.abs(_newP-(+entry.profit||0))>0.001){
+            entry.profit=_newP;
+            await db.collection('trading_journal').doc(id).update({profit:_newP});
+            const pSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="profit"]');
+            if(pSpan){pSpan.innerHTML=jnlFmt(_newP,'pnl');pSpan.dataset.val=String(_newP);}
           }
+        }
+      }
+      // ── Carry-forward: close→next open, totalSeed→next seedStart, totalSeed→next profit ──
+      const _jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+      const _idx=_jnlSorted.findIndex(e=>e.id===id);
+      const _nextE=_idx>=0?_jnlSorted[_idx+1]:null;
+      if(_nextE){
+        const nextUpdate={};let nextDomUpdates=[];
+        // exchange close→open
+        if(key==='upbit'){nextUpdate['exchanges.upbit.open']=+newRaw||0;nextDomUpdates.push({key:'upbitOpen',val:+newRaw||0});}
+        else if(key==='bithumb'){nextUpdate['exchanges.bithumb.open']=+newRaw||0;nextDomUpdates.push({key:'bithumbOpen',val:+newRaw||0});}
+        else if(key==='binance'){nextUpdate['exchanges.binance.open']=+newRaw||0;nextDomUpdates.push({key:'binanceOpen',val:+newRaw||0});}
+        // totalSeed (manual or auto-computed) → next seedStart
+        const carryTS=_newTS!==null?_newTS:(key==='totalSeed'?+newRaw||0:null);
+        if(carryTS!==null){
+          nextUpdate.seedStart=carryTS;_nextE.seedStart=carryTS;
+          nextDomUpdates.push({key:'seedStart',val:carryTS});
+          // also compute next row's profit
+          const nextTS=+_nextE.totalSeed||0;
+          if(nextTS&&carryTS){
+            const nextP=+(nextTS-carryTS).toFixed(4);
+            if(Math.abs(nextP-(+_nextE.profit||0))>0.001){
+              nextUpdate.profit=nextP;_nextE.profit=nextP;
+              nextDomUpdates.push({key:'profit',val:nextP});
+            }
+          }
+        }
+        if(Object.keys(nextUpdate).length){
+          try{
+            await db.collection('trading_journal').doc(_nextE.id).update(nextUpdate);
+            for(const[k,v]of Object.entries(nextUpdate)){
+              if(k.includes('.')){const p=k.split('.');
+                if(p.length===3)_nextE[p[0]]={..._nextE[p[0]],[p[1]]:{...(_nextE[p[0]]?.[p[1]]||{}),[p[2]]:v}};
+              }else _nextE[k]=v;
+            }
+            const nextTr=document.querySelector(`#jnl-sheet-body tr[data-id="${_nextE.id}"]`);
+            if(nextTr){
+              nextDomUpdates.forEach(({key:nk,val:nv})=>{
+                const ns=nextTr.querySelector(`.jnl-cell-view[data-key="${nk}"]`);
+                if(ns){const nc=JNL_COLS.find(c=>c.key===nk);ns.innerHTML=jnlFmt(nv,nc?.fmt||'usd');ns.dataset.val=String(nv);}
+              });
+            }
+          }catch(e){console.error('carry-forward 실패',e);}
         }
       }
       renderJnlMonthlySummary();
@@ -1338,22 +1416,26 @@ function renderJnlMonthlySummary(){
   const totalDays=months.reduce((s,m)=>s+byM[m].days,0);
   const totalWins=months.reduce((s,m)=>s+byM[m].wins,0);
   const wr=totalDays?Math.round(totalWins/totalDays*100):0;
-  const sortedByP=[...months].sort((a,b)=>byM[b].profit-byM[a].profit);
-  const bestM=sortedByP[0],worstM=sortedByP[sortedByP.length-1];
   const posMonths=months.filter(m=>byM[m].profit>0).length;
   const pSign=totalProfit>=0?'+':'-';
   const pCls=totalProfit>=0?'pos':'neg';
 
+  const avgMonthP=totalProfit/months.length;
+  const posMRate=Math.round(posMonths/months.length*100);
+  const avgDailyPnl=totalDays?totalProfit/totalDays:0;
+  const grossW2=months.reduce((s,m)=>s+Math.max(byM[m].profit,0),0);
+  const grossL2=months.reduce((s,m)=>s+Math.abs(Math.min(byM[m].profit,0)),0);
+  const mPF=grossL2?(grossW2/grossL2).toFixed(2):'∞';
   const strip=`<div class="jnl-msum-strip">
     <div class="jnl-msum-card">
-      <div class="jnl-msum-lbl">총 수익금</div>
+      <div class="jnl-msum-lbl">누적 수익금</div>
       <div class="jnl-msum-val ${pCls}">${pSign}$${fmtN(Math.abs(totalProfit))}</div>
-      <div class="jnl-msum-sub">${months.length}개월 합산</div>
+      <div class="jnl-msum-sub">${months.length}개월 · ${totalDays}거래일</div>
     </div>
     <div class="jnl-msum-card">
-      <div class="jnl-msum-lbl">총 거래일</div>
-      <div class="jnl-msum-val">${totalDays}일</div>
-      <div class="jnl-msum-sub">수익 ${posMonths}개월 · 손실 ${months.length-posMonths}개월</div>
+      <div class="jnl-msum-lbl">월평균 수익금</div>
+      <div class="jnl-msum-val ${avgMonthP>=0?'pos':'neg'}">${avgMonthP>=0?'+':'-'}$${fmtN(Math.abs(avgMonthP))}</div>
+      <div class="jnl-msum-sub">수익월 ${posMRate}% (${posMonths}/${months.length}개월)</div>
     </div>
     <div class="jnl-msum-card">
       <div class="jnl-msum-lbl">일간 승률</div>
@@ -1361,22 +1443,19 @@ function renderJnlMonthlySummary(){
       <div class="jnl-msum-sub">${totalWins}승 ${totalDays-totalWins}패</div>
     </div>
     <div class="jnl-msum-card">
-      <div class="jnl-msum-lbl">최고 수익월</div>
-      <div class="jnl-msum-val pos">+$${fmtN(byM[bestM].profit)}</div>
-      <div class="jnl-msum-sub">${bestM?.slice(2).replace('-','/')}</div>
-    </div>
-    <div class="jnl-msum-card">
-      <div class="jnl-msum-lbl">최저 수익월</div>
-      <div class="jnl-msum-val neg">-$${fmtN(Math.abs(byM[worstM].profit))}</div>
-      <div class="jnl-msum-sub">${worstM?.slice(2).replace('-','/')}</div>
+      <div class="jnl-msum-lbl">일평균 손익</div>
+      <div class="jnl-msum-val ${avgDailyPnl>=0?'pos':'neg'}">${avgDailyPnl>=0?'+':'-'}$${fmtN(Math.abs(avgDailyPnl))}</div>
+      <div class="jnl-msum-sub">월손익비 ${mPF}</div>
     </div>
   </div>`;
 
-  // ── Bar chart ──
-  const maxAbs=Math.max(...months.map(m=>Math.abs(byM[m].profit)),1);
+  // ── Bar chart — soft-cap scaling (75th pct ×1.5 cap prevents outliers dominating) ──
+  const absVals=[...months.map(m=>Math.abs(byM[m].profit))].sort((a,b)=>a-b);
+  const p75=absVals[Math.min(Math.floor(absVals.length*0.75),absVals.length-1)]||1;
+  const softCap=Math.max(p75*1.5,1);
   const cols=months.map(m=>{
     const d=byM[m];
-    const pct=Math.abs(d.profit)/maxAbs;
+    const pct=Math.min(Math.abs(d.profit)/softCap,1);
     const barH=Math.max(Math.round(pct*40),2); // 40px max bar height
     const isPos=d.profit>=0;
     const pSign=isPos?'+':'-';
@@ -1425,24 +1504,6 @@ window.toggleJnlPanel=function(){
 };
 
 window.jnlSortToggle=function(){jnlSortAsc=!jnlSortAsc;renderJournal();};
-
-/* 날짜별 원달러 환율 일괄 자동입력 (Upbit USDT-KRW) */
-window.fillMissingTether=async function(){
-  const missing=journal.filter(e=>!e.tether||+e.tether===0);
-  if(!missing.length){toast('모든 행에 환율이 이미 입력되어 있습니다','ok');return;}
-  toast(`${missing.length}개 행 환율 조회 중…`,'ok');
-  let filled=0,failed=0;
-  for(const entry of missing){
-    const rate=await fetchTetherRate(entry.date);
-    if(!rate){failed++;continue;}
-    try{
-      await db.collection('trading_journal').doc(entry.id).update({tether:rate});
-      entry.tether=rate;filled++;
-    }catch{failed++;}
-  }
-  renderJournal();
-  toast(`환율 입력 완료: ${filled}행${failed?` (실패 ${failed}행)`:''}`,'ok');
-};
 
 /* Column drag-to-reorder */
 function getColOrder(){try{const s=localStorage.getItem('hb_jnl_col_order');return s?JSON.parse(s):null;}catch{return null;}}
