@@ -216,17 +216,23 @@
     .jnl-mchart-col:hover{background:rgba(255,255,255,.07)}
     .jnl-mchart-col::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.07);pointer-events:none;transform:translateX(-50%)}
     .jnl-mchart-col:hover::after{background:rgba(255,255,255,.22)}
-    /* bars: pos-area and neg-area are FIXED height = max-barH, so zero line never shifts */
-    .jnl-mchart-bars{height:122px;display:flex;flex-direction:column;width:100%}
-    .jnl-mchart-pos-area{height:60px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px}
-    .jnl-mchart-neg-area{height:60px;display:flex;flex-direction:column;justify-content:flex-start;padding:0 10px}
+    /* bars: FIXED height per area so zero line never shifts */
+    .jnl-mchart-bars{height:82px;display:flex;flex-direction:column;width:100%}
+    .jnl-mchart-pos-area{height:40px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px}
+    .jnl-mchart-neg-area{height:40px;display:flex;flex-direction:column;justify-content:flex-start;padding:0 8px}
     .jnl-mchart-bar{width:100%;min-height:2px}
     .jnl-mchart-bar.pos{background:rgba(94,201,138,.85);border-radius:3px 3px 0 0}
     .jnl-mchart-bar.neg{background:rgba(224,120,136,.85);border-radius:0 0 3px 3px}
     .jnl-mchart-zero{width:100%;height:2px;background:rgba(255,255,255,.28);flex-shrink:0}
-    .jnl-mchart-label{font-size:.68rem;color:var(--ac);font-weight:600;margin-top:5px;white-space:nowrap}
-    .jnl-mchart-profit{font-size:.72rem;font-weight:700;margin-top:2px;white-space:nowrap}
-    .jnl-mchart-stats{font-size:.60rem;color:var(--tx2);margin-top:3px;text-align:center;line-height:1.65;white-space:nowrap}
+    .jnl-mchart-label{font-size:.65rem;color:var(--ac);font-weight:600;margin-top:4px;white-space:nowrap}
+    .jnl-mchart-profit{font-size:.68rem;font-weight:700;margin-top:1px;white-space:nowrap}
+    .jnl-mchart-stats{font-size:.58rem;color:var(--tx2);margin-top:2px;text-align:center;line-height:1.55;white-space:nowrap}
+    /* monthly summary stats strip */
+    .jnl-msum-strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--bd)}
+    .jnl-msum-card{display:flex;flex-direction:column;gap:2px;min-width:90px;flex:1}
+    .jnl-msum-lbl{font-size:.58rem;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em}
+    .jnl-msum-val{font-size:.80rem;font-weight:700}
+    .jnl-msum-sub{font-size:.58rem;color:var(--tx2)}
     .badge.open-status{background:var(--ac-dim);color:var(--ac-l)}
     .tr-main-row{cursor:pointer}
     .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
@@ -435,6 +441,7 @@
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="jnl-count-badge" style="font-size:.78rem;color:var(--tx2)"></span>
           <button class="btn btn-secondary btn-sm" onclick="addJnlCol()">＋ 열 추가</button>
+          <button class="btn btn-secondary btn-sm" onclick="fillMissingTether()" title="환율 미기입 행에 자동으로 테더 채우기">⚡ 테더 일괄입력</button>
           <button class="btn btn-secondary btn-sm" onclick="exportJournalXLSX()">📊 엑셀 내보내기</button>
           <button class="btn btn-secondary btn-sm" onclick="openImportModal('journal')">📥 가져오기</button>
           <button class="btn btn-primary btn-sm" onclick="addJnlRow()">+ 행 추가</button>
@@ -710,6 +717,7 @@ const pend={tr:[]};
 const savedImgs={tr:[]};
 let editTradeId=null;
 const CH={};
+let _jnlDirty=true; // journal needs re-render
 
 /* ── Theme ── */
 window.setTheme=function(t){
@@ -809,7 +817,7 @@ window.goTo=function(v){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.id==='view-'+v));
   if(v==='dashboard')   renderDashboard();
-  if(v==='journal')     renderJournal();
+  if(v==='journal')     {if(_jnlDirty)renderJournal();}
   if(v==='trades')      {renderTrades();renderTradesCurve();}
   if(v==='seasonality') renderSeasonality();
   if(v==='ai')          renderAIView();
@@ -828,6 +836,7 @@ async function fetchJournal(){
   const s=await db.collection('trading_journal').orderBy('date','desc').get();
   const all=s.docs.map(d=>({id:d.id,...d.data()}));
   journal=all.filter(e=>isDefault?(!e.userId||e.userId===uid):e.userId===uid);
+  _jnlDirty=true;
 }
 async function recalcCumulatives(){
   trades.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:0);
@@ -1038,6 +1047,7 @@ function rateHeatBg(val){
 }
 
 window.renderJournal=function(){
+  _jnlDirty=false;
   const customCols=getCustomCols();
   const allCols=getOrderedCols([
     ...JNL_COLS,
@@ -1262,7 +1272,7 @@ window.addJnlRow=async function(){
   };
   try{
     const ref=await db.collection('trading_journal').add(data);
-    data.id=ref.id;journal.unshift(data);renderJournal();
+    data.id=ref.id;journal.unshift(data);_jnlDirty=true;renderJournal();
     const firstSpan=document.querySelector('#jnl-sheet-body tr:first-child .jnl-cell-view[data-key="date"]');
     if(firstSpan)setTimeout(()=>firstSpan.click(),60);
     toast(`행 추가됨${tether?' (테더 '+(+tether).toLocaleString()+'원 자동입력)':''}`, 'ok');
@@ -1279,22 +1289,61 @@ function renderJnlMonthlySummary(){
     byM[m].pPnl+=+(e.personalPnl||0);byM[m].days++;
     if((+e.profit||0)>0)byM[m].wins++;
   });
-  const allM=Object.keys(byM).sort(); // ascending for chart
-  const months=allM.slice(-18);       // up to 18 months
+  const allM=Object.keys(byM).sort();
+  const months=allM.slice(-18);
   if(!months.length){el.innerHTML='<div style="color:var(--tx2);font-size:.80rem;padding:6px 0">데이터 없음</div>';return;}
 
-  const maxAbs=Math.max(...months.map(m=>Math.abs(byM[m].profit)),1);
+  // ── Aggregate stats strip ──
+  const totalProfit=months.reduce((s,m)=>s+byM[m].profit,0);
+  const totalDays=months.reduce((s,m)=>s+byM[m].days,0);
+  const totalWins=months.reduce((s,m)=>s+byM[m].wins,0);
+  const wr=totalDays?Math.round(totalWins/totalDays*100):0;
+  const sortedByP=[...months].sort((a,b)=>byM[b].profit-byM[a].profit);
+  const bestM=sortedByP[0],worstM=sortedByP[sortedByP.length-1];
+  const posMonths=months.filter(m=>byM[m].profit>0).length;
+  const pSign=totalProfit>=0?'+':'-';
+  const pCls=totalProfit>=0?'pos':'neg';
 
+  const strip=`<div class="jnl-msum-strip">
+    <div class="jnl-msum-card">
+      <div class="jnl-msum-lbl">총 수익금</div>
+      <div class="jnl-msum-val ${pCls}">${pSign}$${fmtN(Math.abs(totalProfit))}</div>
+      <div class="jnl-msum-sub">${months.length}개월 합산</div>
+    </div>
+    <div class="jnl-msum-card">
+      <div class="jnl-msum-lbl">총 거래일</div>
+      <div class="jnl-msum-val">${totalDays}일</div>
+      <div class="jnl-msum-sub">수익 ${posMonths}개월 · 손실 ${months.length-posMonths}개월</div>
+    </div>
+    <div class="jnl-msum-card">
+      <div class="jnl-msum-lbl">일간 승률</div>
+      <div class="jnl-msum-val ${wr>=50?'pos':'neg'}">${wr}%</div>
+      <div class="jnl-msum-sub">${totalWins}승 ${totalDays-totalWins}패</div>
+    </div>
+    <div class="jnl-msum-card">
+      <div class="jnl-msum-lbl">최고 수익월</div>
+      <div class="jnl-msum-val pos">+$${fmtN(byM[bestM].profit)}</div>
+      <div class="jnl-msum-sub">${bestM?.slice(2).replace('-','/')}</div>
+    </div>
+    <div class="jnl-msum-card">
+      <div class="jnl-msum-lbl">최저 수익월</div>
+      <div class="jnl-msum-val neg">-$${fmtN(Math.abs(byM[worstM].profit))}</div>
+      <div class="jnl-msum-sub">${worstM?.slice(2).replace('-','/')}</div>
+    </div>
+  </div>`;
+
+  // ── Bar chart ──
+  const maxAbs=Math.max(...months.map(m=>Math.abs(byM[m].profit)),1);
   const cols=months.map(m=>{
     const d=byM[m];
     const pct=Math.abs(d.profit)/maxAbs;
-    const barH=Math.max(Math.round(pct*60),2); // 60px max bar height
+    const barH=Math.max(Math.round(pct*40),2); // 40px max bar height
     const isPos=d.profit>=0;
     const pSign=isPos?'+':'-';
     const pCls=isPos?'pos':'neg';
     const wr=d.days?Math.round(d.wins/d.days*100):0;
     const avgR=d.days?(d.rate/d.days).toFixed(1):0;
-    const lbl=m.slice(2).replace('-','/'); // "25/07"
+    const lbl=m.slice(2).replace('-','/');
     const statsLines=[`${d.days}일 · 승${wr}%`,`${avgR}%/일`];
     if(d.pPnl)statsLines.push(`<span style="color:var(--ac);opacity:.85">개인 ${d.pPnl>=0?'+':'-'}$${fmtN(Math.abs(d.pPnl))}</span>`);
     return`<div class="jnl-mchart-col">
@@ -1309,7 +1358,7 @@ function renderJnlMonthlySummary(){
     </div>`;
   }).join('');
 
-  el.innerHTML=`<div class="jnl-mchart-outer"><div class="jnl-mchart-cols">${cols}</div></div>`;
+  el.innerHTML=strip+`<div class="jnl-mchart-outer"><div class="jnl-mchart-cols">${cols}</div></div>`;
 }
 
 window.toggleJnlPanel=function(){
@@ -1453,19 +1502,22 @@ window.jnlColDrop=function(e){
   renderJournal();
 };
 
-/* USD/KRW daily rate — JSDelivr CDN (CDN-hosted, always CORS OK) */
+/* USD/KRW daily rate — primary: JSDelivr CDN, fallback: exchangerate.host */
 async function fetchTetherRate(date){
+  const today_=new Date().toISOString().slice(0,10);
+  const tag=date>=today_?'latest':date;
+  // Primary: JSDelivr CDN (always CORS-safe)
   try{
-    const today_=new Date().toISOString().slice(0,10);
-    const tag=date>=today_?'latest':date; // latest for today/future
-    const r=await fetch(
-      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${tag}/v1/currencies/usd.json`
-    );
-    if(!r.ok)return null;
-    const d=await r.json();
-    const rate=d?.usd?.krw;
-    return rate?Math.round(rate):null; // return integer KRW rate
-  }catch{return null;}
+    const r=await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${tag}/v1/currencies/usd.json`,{cache:'force-cache'});
+    if(r.ok){const d=await r.json();const rate=d?.usd?.krw;if(rate)return Math.round(rate);}
+  }catch{}
+  // Fallback: Frankfurter (server-side only — may CORS-fail but worth trying)
+  try{
+    const fTag=date>=today_?'latest':date;
+    const r=await fetch(`https://api.frankfurter.app/${fTag}?from=USD&to=KRW`);
+    if(r.ok){const d=await r.json();const rate=d?.rates?.KRW;if(rate)return Math.round(rate);}
+  }catch{}
+  return null;
 }
 
 
@@ -2045,15 +2097,15 @@ function txDim() {return getComputedStyle(document.documentElement).getPropertyV
 function mkCA(){const a=accent(),td=txDim();return{x:{ticks:{color:td,font:{size:10}},grid:{color:a+'22'}},y:{ticks:{color:td,font:{size:10}},grid:{color:a+'22'}}};}
 function mkLine(id,labels,data){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
-  const c=accent();CH[id]=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:c,backgroundColor:c+'28',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:c}]},options:{responsive:true,plugins:{legend:{display:false}},scales:mkCA()}});
+  const c=accent();CH[id]=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:c,backgroundColor:c+'28',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:c}]},options:{animation:{duration:0},responsive:true,plugins:{legend:{display:false}},scales:mkCA()}});
 }
 function mkDonut(id,wins,losses){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
-  CH[id]=new Chart(ctx,{type:'doughnut',data:{labels:['승','패'],datasets:[{data:[wins,losses],backgroundColor:['rgba(76,175,122,.8)','rgba(207,102,121,.8)'],borderWidth:0}]},options:{responsive:true,plugins:{legend:{labels:{color:txDim(),font:{size:11}}}}}});
+  CH[id]=new Chart(ctx,{type:'doughnut',data:{labels:['승','패'],datasets:[{data:[wins,losses],backgroundColor:['rgba(76,175,122,.8)','rgba(207,102,121,.8)'],borderWidth:0}]},options:{animation:{duration:0},responsive:true,plugins:{legend:{labels:{color:txDim(),font:{size:11}}}}}});
 }
 function mkBar(id,labels,data,color){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
-  CH[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:Array.isArray(color)?color:Array(labels.length).fill(color),borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:mkCA()}});
+  CH[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:Array.isArray(color)?color:Array(labels.length).fill(color),borderRadius:4}]},options:{animation:{duration:0},responsive:true,plugins:{legend:{display:false}},scales:mkCA()}});
 }
 
 /* ── Images ── */
