@@ -331,8 +331,25 @@
     /* ── Alert Banner ── */
     .loss-alert{background:var(--red-dim);border:1px solid rgba(207,102,121,.4);border-radius:10px;padding:13px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
     .loss-alert .la-icon{font-size:1.3rem;flex-shrink:0}
-    .loss-alert .la-body{font-size:.84rem;line-height:1.5;color:var(--red)}
+    .loss-alert .la-body{font-size:.84rem;line-height:1.5;color:var(--red);flex:1}
     .loss-alert .la-title{font-weight:600;margin-bottom:2px}
+    /* AI Coach Chat */
+    #ai-fab{position:fixed;right:22px;bottom:22px;width:52px;height:52px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;font-size:1.4rem;color:var(--bg);z-index:600;box-shadow:0 4px 20px rgba(0,0,0,.45);transition:transform .15s;display:flex;align-items:center;justify-content:center;font-family:inherit}
+    #ai-fab:hover{transform:scale(1.1)}
+    #ai-panel{position:fixed;right:22px;bottom:86px;width:390px;max-height:600px;background:var(--bg2);border:1px solid var(--bd);border-radius:16px;display:flex;flex-direction:column;z-index:599;box-shadow:0 12px 48px rgba(0,0,0,.55);transform:translateY(14px) scale(.97);opacity:0;pointer-events:none;transition:all .22s cubic-bezier(.4,0,.2,1)}
+    #ai-panel.open{transform:translateY(0) scale(1);opacity:1;pointer-events:all}
+    #ai-panel-hd{padding:13px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0}
+    #ai-panel-cfg{padding:10px 14px;border-bottom:1px solid var(--bd);display:none;flex-shrink:0}
+    #ai-panel-msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:160px}
+    #ai-panel-qs{padding:0 12px 10px;display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0}
+    #ai-panel-bot{padding:10px 12px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-shrink:0}
+    .ai-msg-u{align-self:flex-end;background:var(--ac-dim);border:1px solid var(--bd);border-radius:12px 12px 4px 12px;padding:8px 12px;max-width:88%;font-size:.83rem;line-height:1.5}
+    .ai-msg-a{align-self:flex-start;background:var(--bg3);border:1px solid var(--bd);border-radius:12px 12px 12px 4px;padding:8px 12px;max-width:92%;font-size:.83rem;line-height:1.6;white-space:pre-wrap}
+    .ai-msg-a.thinking{color:var(--tx2);font-style:italic}
+    .ai-q-chip{background:var(--bg3);border:1px solid var(--bd);border-radius:20px;padding:5px 11px;font-size:.75rem;cursor:pointer;color:var(--tx2);transition:all .15s;font-family:inherit;white-space:nowrap}
+    .ai-q-chip:hover{border-color:var(--ac);color:var(--ac)}
+    #ai-inp{flex:1;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;color:var(--tx);padding:8px 11px;font-family:inherit;font-size:.84rem;outline:none;resize:none;line-height:1.4}
+    #ai-inp:focus{border-color:var(--ac)}
 
   </style>
 </head>
@@ -961,7 +978,7 @@ function renderDashboard(){
   if(alertEl){
     if(curLossStreak>=3){
       const lastLossDate=jnlSorted.filter(e=>+e.profit<0).slice(-1)[0]?.date||'';
-      alertEl.innerHTML=`<div class="loss-alert"><div class="la-icon">🔴</div><div class="la-body"><div class="la-title">연속 손실 ${curLossStreak}일 경고</div>마지막 손실: ${lastLossDate} &nbsp;|&nbsp; 포지션 크기 축소 및 전략 재검토를 권장합니다.</div></div>`;
+      alertEl.innerHTML=`<div class="loss-alert"><div class="la-icon">🔴</div><div class="la-body"><div class="la-title">연속 손실 ${curLossStreak}일 경고</div>마지막 손실: ${lastLossDate} &nbsp;|&nbsp; 포지션 크기 축소 및 전략 재검토 권장</div><button onclick="openAiChat('현재 연속 ${curLossStreak}일 손실 중입니다. 지금 어떻게 해야 할까요?')" style="background:var(--ac);border:none;border-radius:8px;color:var(--bg);padding:8px 14px;cursor:pointer;font-size:.80rem;font-weight:600;white-space:nowrap;font-family:inherit;flex-shrink:0">💬 AI 코치 상담</button></div>`;
     } else {
       alertEl.innerHTML='';
     }
@@ -1055,56 +1072,14 @@ function renderDashboard(){
             }).join('');
           })()}
         </div>
-        <div class="section-label" style="margin-top:18px;margin-bottom:8px">💡 매매 분석 인사이트</div>
-        <div style="display:flex;flex-direction:column;gap:7px" id="jnl-insights-static">
-          ${(()=>{
-            const insights=[];
-            const wr2=+jWr,pf=isNaN(+jPF)?null:+jPF,avgW2=+jAvgW,avgL2=+jAvgL;
-            // Win rate
-            if(wr2<40)insights.push({c:'var(--red)',t:`📈 승률 ${wr2}% 끌어올리기: 최근 손실일의 공통 조건(시간대·시황·감정 상태)을 기록하고, 해당 조건에서 진입 자제 규칙을 추가하세요. 수익일(${jWin}일)의 패턴을 먼저 분석해 반복 가능한 셋업을 찾는 것이 가장 빠른 개선입니다.`});
-            else if(wr2<50)insights.push({c:'rgba(255,180,0,.8)',t:`📈 승률 ${wr2}%에서 수익 구조 강화하기: 수익일 평균 $${fmtN(avgW2)}을 $${(+avgW2*1.2).toFixed(0)}으로 올리거나 손실일 평균 $${fmtN(avgL2)}을 $${(+avgL2*0.8).toFixed(0)}으로 줄이면 동일 승률에서도 흑자 구조가 됩니다. 수익 목표를 조금 늘리는 것부터 시작해보세요.`});
-            else insights.push({c:'var(--green)',t:`✅ 승률 ${wr2}% — 탄탄한 기반입니다. 다음 레벨업: 수익일 평균 $${fmtN(avgW2)}을 유지하면서 손절을 더 엄격히 지키면 P-Factor가 올라가 시드 성장이 가속됩니다.`});
-            // P-Factor
-            if(pf!==null&&pf<1){const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);insights.push({c:'rgba(255,180,0,.8)',t:`📊 R:R 개선 방향 (P-Factor ${jPF}): 손절을 현재보다 20% 줄이거나 1차 수익 실현을 늦춰 수익일 평균을 키워보세요. 손익분기 승률 ${needWr}%까지 R:R을 맞추는 것이 우선 목표입니다.`});}
-            else if(pf!==null)insights.push({c:'var(--green)',t:`💰 P-Factor ${jPF} — 손익비 강점을 활용하세요: 이 구조를 유지하면서 고확신 셋업에서 포지션을 조금씩 늘리면 시드 성장이 더 빨라집니다.`});
-            // Streak
-            if(curLossStreak>=3)insights.push({c:'var(--red)',t:`🛡️ 연속 손실 ${curLossStreak}일 — 지금 당장 실행: 포지션 크기를 평소의 50%로 줄이세요. 다음 수익이 날 때까지 새로운 전략보다 이미 검증된 셋업만 진입합니다.`});
-            if(maxL>=5)insights.push({c:'rgba(255,180,0,.8)',t:`🛡️ 연속 손실 방어 규칙 만들기: 최대 연속 손실 ${maxL}일 경험을 바탕으로, 지금 일지에 "연속 손실 3일 → 포지션 50% 축소" 규칙을 기록해두세요. 사전에 정해두면 감정적 판단을 막습니다.`});
-            if(maxW>=3)insights.push({c:'var(--green)',t:`🟢 연승 구간 활용법: 최장 연승 ${maxW}일 기록이 있습니다. 연승 중 포지션을 최대 1.5배까지 점진적으로 늘릴 수 있지만, "연승 종료 시 즉시 원래 크기로 복귀" 규칙을 미리 정해두세요.`});
-            // Breakeven WR
-            const breakEvenWr=avgW2&&avgL2?Math.ceil(avgL2/(avgL2+avgW2)*100):null;
-            const breakEvenGap=breakEvenWr?breakEvenWr-wr2:0;
-            if(breakEvenWr&&wr2<breakEvenWr)insights.push({c:'rgba(255,180,0,.8)',t:`📐 R:R 조정으로 흑자 전환: 손절 $${(+avgL2*0.85).toFixed(0)} 또는 목표 수익 $${(+avgW2*1.15).toFixed(0)}으로 기준을 조정하면 손익분기 승률이 현재 ${wr2}% 수준까지 내려옵니다. 트레이딩 규칙에 지금 추가하세요.`});
-            // Kelly
-            if(jKelly>0)insights.push({c:jHalfKelly>=0.02?'var(--green)':'rgba(255,180,0,.8)',t:`📐 포지션 크기 표준화 가이드: 현재 R:R(${jRR.toFixed(2)}) 기준 반 켈리 ${(jHalfKelly*100).toFixed(1)}%가 장기 성장을 극대화하는 비율입니다. 이 수치를 기본 포지션 크기로 정해두면 감정적 베팅을 줄일 수 있습니다.`});
-            // Day-of-week analysis
-            const KD2=['일','월','화','수','목','금','토'];
-            const ds2={};KD2.forEach(d=>{ds2[d]={n:0,win:0,pnl:0};});
-            jnlSorted.forEach(e=>{if(!e.date||+e.profit===0)return;const d=KD2[new Date(e.date+'T12:00:00').getDay()];ds2[d].n++;ds2[d].pnl+=+(e.profit||0);if(+e.profit>0)ds2[d].win++;});
-            const activeDays2=KD2.filter(d=>ds2[d].n>=3);
-            if(activeDays2.length>=2){
-              const bestD=activeDays2.reduce((a,b)=>ds2[b].win/ds2[b].n>ds2[a].win/ds2[a].n?b:a);
-              const worstD=activeDays2.reduce((a,b)=>ds2[b].win/ds2[b].n<ds2[a].win/ds2[a].n?b:a);
-              const bestWR=Math.round(ds2[bestD].win/ds2[bestD].n*100);
-              const worstWR=Math.round(ds2[worstD].win/ds2[worstD].n*100);
-              const bestAvg=+(ds2[bestD].pnl/ds2[bestD].n).toFixed(0);
-              const worstAvg=+(ds2[worstD].pnl/ds2[worstD].n).toFixed(0);
-              if(bestWR-worstWR>=20)insights.push({c:'rgba(100,180,255,.8)',t:`📅 요일 전략 추천: ${bestD}요일(승률 ${bestWR}%, 평균 ${bestAvg>=0?'+':''}$${fmtN(Math.abs(bestAvg))})에 적극 진입하고, ${worstD}요일(승률 ${worstWR}%)은 포지션을 절반으로 줄이거나 관망하세요. 이것만 실천해도 기대수익이 즉시 개선됩니다.`});
-            }
-            return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid ${i.c};font-size:.84rem;line-height:1.6">${i.t}</div>`).join('');
-          })()}
-        </div>
-        <div style="margin-top:12px;background:var(--bg3);border-radius:10px;padding:12px 14px;border:1px solid var(--bd)">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div style="font-size:.80rem;font-weight:500">🤖 AI 트레이딩 코치</div>
-            <input type="password" id="gemini-key-inp" placeholder="Gemini (AIza...) 또는 OpenRouter (sk-or-...)" value="${localStorage.getItem('hb_gemini_key')||''}" style="flex:1;min-width:220px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:6px 10px;font-family:inherit;font-size:.80rem" onchange="localStorage.setItem('hb_gemini_key',this.value)">
-            <button class="btn btn-secondary btn-sm" onclick="genGeminiInsights()" style="white-space:nowrap">✨ 분석 생성</button>
+        <div style="margin-top:16px;background:var(--bg3);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+          <div style="font-size:1.8rem;line-height:1">🤖</div>
+          <div style="flex:1">
+            <div style="font-size:.86rem;font-weight:600;margin-bottom:3px">AI 트레이딩 코치</div>
+            <div style="font-size:.76rem;color:var(--tx2)">내 매매 데이터 기반 맞춤 상담 · 전략 분석 · 개선 방향</div>
           </div>
-          <div style="font-size:.72rem;color:var(--tx2);margin-top:7px;line-height:1.7">
-            무료 키 발급 → <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--ac)">OpenRouter</a> (sk-or-... / 무료 모델 제공) · <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">Google AI Studio</a> (AIza... / 유료 플랜 필요할 수 있음)
-          </div>
-        </div>
-        <div id="gemini-insights-out" style="margin-top:8px"></div>`;
+          <button onclick="openAiChat()" style="background:var(--ac);border:none;border-radius:8px;color:var(--bg);padding:8px 16px;cursor:pointer;font-size:.82rem;font-weight:600;white-space:nowrap;font-family:inherit">상담 시작 →</button>
+        </div>`;
     } else {
       jnlEl.innerHTML='';
     }
@@ -1204,120 +1179,139 @@ function renderDashboard(){
   }
 }
 
-/* ── AI Insights (Gemini + OpenRouter) ── */
-function _buildAiPrompt(){
-  const jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
-  const active=jnlSorted.filter(e=>+e.profit!==0);
+/* ── AI Coach Chatbot ── */
+let _aiMsgs=[];
+let _aiModel=localStorage.getItem('hb_ai_model')||'gemini-2.5-flash-lite';
+let _aiDetecting=false;
+let _aiOpen=false;
+
+function toggleAiChat(){
+  _aiOpen=!_aiOpen;
+  document.getElementById('ai-panel')?.classList.toggle('open',_aiOpen);
+  if(_aiOpen){setTimeout(()=>document.getElementById('ai-inp')?.focus(),220);}
+}
+
+function openAiChat(preMsg){
+  if(!_aiOpen){_aiOpen=true;document.getElementById('ai-panel')?.classList.add('open');}
+  if(preMsg){
+    const inp=document.getElementById('ai-inp');
+    if(inp){inp.value=preMsg;inp.focus();}
+  } else {
+    setTimeout(()=>document.getElementById('ai-inp')?.focus(),220);
+  }
+}
+
+function toggleAiCfg(){
+  const el=document.getElementById('ai-panel-cfg');
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+
+async function detectAiModel(key){
+  if(!key||_aiDetecting)return;
+  _aiDetecting=true;
+  const ind=document.getElementById('ai-model-ind');
+  if(ind)ind.textContent='감지 중…';
+  try{
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=100`);
+    const d=await r.json();
+    if(d.error||!d.models)return;
+    const names=d.models.filter(m=>m.supportedGenerationMethods?.includes('generateContent')).map(m=>m.name.replace('models/',''));
+    const preferred=['gemini-2.5-flash-lite','gemini-2.5-flash','gemini-2.0-flash-lite','gemini-2.0-flash','gemini-1.5-flash-latest','gemini-1.5-flash'];
+    for(const p of preferred){
+      if(names.some(n=>n===p||n.startsWith(p))){_aiModel=p;localStorage.setItem('hb_ai_model',p);break;}
+    }
+    if(!preferred.some(p=>names.some(n=>n===p||n.startsWith(p)))){
+      const flash=names.find(n=>n.includes('flash')&&!n.includes('thinking'));
+      if(flash){_aiModel=flash;localStorage.setItem('hb_ai_model',flash);}
+    }
+    if(ind)ind.textContent=_aiModel;
+  }catch(e){}finally{_aiDetecting=false;}
+}
+
+function buildTradingCtx(){
+  const sorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+  const active=sorted.filter(e=>+e.profit!==0);
   const jWin=active.filter(e=>+e.profit>0).length;
   const jLoss=active.filter(e=>+e.profit<0).length;
   const jWr=active.length?(jWin/active.length*100).toFixed(1):0;
-  const jGrossW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
-  const jGrossL=Math.abs(active.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit||0),0));
-  const jAvgW=jWin?(jGrossW/jWin).toFixed(2):0;
-  const jAvgL=jLoss?(jGrossL/jLoss).toFixed(2):0;
-  const jPF=jGrossL?(jGrossW/jGrossL).toFixed(2):'∞';
-  const jEV=+(+jWr/100*+jAvgW-(1-+jWr/100)*+jAvgL).toFixed(2);
-  const latestSeed=+jnlSorted[jnlSorted.length-1]?.totalSeed||0;
+  const gW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
+  const gL=Math.abs(active.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit||0),0));
+  const avgW=jWin?(gW/jWin).toFixed(2):0;
+  const avgL=jLoss?(gL/jLoss).toFixed(2):0;
+  const pf=gL?(gW/gL).toFixed(2):'∞';
+  const ev=+(+jWr/100*+avgW-(1-+jWr/100)*+avgL).toFixed(2);
+  const seed=+sorted[sorted.length-1]?.totalSeed||0;
   const KD=['일','월','화','수','목','금','토'];
   const ds={};KD.forEach(d=>{ds[d]={n:0,win:0,pnl:0};});
   active.forEach(e=>{const d=KD[new Date(e.date+'T12:00:00').getDay()];ds[d].n++;ds[d].pnl+=+(e.profit||0);if(+e.profit>0)ds[d].win++;});
-  const dayStats=KD.filter(d=>ds[d].n>=3).map(d=>`${d}:${Math.round(ds[d].win/ds[d].n*100)}%`).join(' ');
+  const dayStats=KD.filter(d=>ds[d].n>=3).map(d=>`${d}요일:승률${Math.round(ds[d].win/ds[d].n*100)}%/평균$${(ds[d].pnl/ds[d].n).toFixed(0)}`).join(' ');
   const byM={};active.forEach(e=>{const m=e.date?.slice(0,7);if(!m)return;if(!byM[m])byM[m]={n:0,p:0};byM[m].n++;byM[m].p+=+e.profit||0;});
-  const mSummary=Object.entries(byM).sort(([a],[b])=>b>a?1:-1).slice(0,3).map(([m,v])=>`${m.slice(5)}월:${v.n}일 ${v.p>=0?'+':''}$${v.p.toFixed(0)}`).join(' ');
-  return `트레이딩 코치로서 아래 데이터 기반 Next Action 4개를 한국어로 코칭하세요. 각각 이모지+제목: 설명 형태, 마크다운 없이.
-승률:${jWr}% 수익일${jWin}/손실일${jLoss} 평균수익$${jAvgW}/평균손실$${jAvgL} P-Factor:${jPF} EV:${jEV>=0?'+':''}$${jEV} 시드:$${fmtN(latestSeed)} 요일:${dayStats||'없음'} 최근:${mSummary||'없음'}`;
+  const mS=Object.entries(byM).sort(([a],[b])=>b>a?1:-1).slice(0,3).map(([m,v])=>`${m.slice(5)}월:${v.n}일 ${v.p>=0?'+':''}$${v.p.toFixed(0)}`).join(' ');
+  let streak=0;for(let i=sorted.length-1;i>=0;i--){const p=+sorted[i].profit||0;if(!p)continue;if(p<0)streak++;else break;}
+  return `당신은 전문 트레이딩 코치입니다. 아래는 이 트레이더의 실제 매매일지 데이터입니다. 한국어로 간결하고 실용적으로 답변하세요.
+[트레이딩 데이터] 총거래일:${active.length}일 승률:${jWr}% 수익일:${jWin} 손실일:${jLoss} 평균수익:$${avgW} 평균손실:$${avgL} P-Factor:${pf} EV:${ev>=0?'+':''}$${ev} 현재시드:$${fmtN(seed)} 연속손실:${streak}일 요일패턴:[${dayStats||'없음'}] 최근3개월:[${mS||'없음'}]`;
 }
 
-function _renderAiResult(out, text, modelLabel){
-  const lines=text.split('\n').map(s=>s.trim()).filter(s=>s.length>10);
-  out.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
-    <div style="font-size:.72rem;color:var(--tx2);margin-bottom:2px">via ${modelLabel}</div>
-    ${lines.map(l=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid rgba(100,180,255,.7);font-size:.84rem;line-height:1.6">${l.replace(/</g,'&lt;')}</div>`).join('')}
-  </div>`;
-}
-
-async function _tryGemini(key, prompt, out){
-  // Correct API versions: 2.x → v1beta, 1.5 → v1
-  const MODELS=[
-    {url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent',name:'gemini-2.0-flash-lite'},
-    {url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',name:'gemini-2.0-flash'},
-    {url:'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',name:'gemini-1.5-flash'},
-    {url:'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent',name:'gemini-1.5-flash-latest'},
-  ];
-  let lastErr='';
-  for(const {url,name} of MODELS){
-    try{
-      out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ 연결 중 (${name})...</div>`;
-      const resp=await fetch(`${url}?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:800}})});
-      if(!resp.ok){
-        const e=await resp.json();const msg=e.error?.message||resp.statusText;
-        if(resp.status===400&&msg.includes('API key'))return{err:'auth'};
-        if(resp.status===401||resp.status===403)return{err:'auth',msg};
-        lastErr=`${name}: ${msg.slice(0,120)}`;continue;
-      }
-      const data=await resp.json();
-      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
-      if(text){_renderAiResult(out,text,name);return{ok:true};}
-      lastErr=`${name}: 빈 응답`;
-    }catch(e){lastErr=e.message?.slice(0,120)||'네트워크 오류';}
+function renderAiMsgs(){
+  const box=document.getElementById('ai-panel-msgs');
+  if(!box)return;
+  if(!_aiMsgs.length){
+    box.innerHTML=`<div class="ai-msg-a">안녕하세요! 저는 AI 트레이딩 코치입니다. 매매일지 데이터를 바탕으로 맞춤 조언을 드립니다. 아래 질문 버튼을 눌러보세요 👇</div>`;
+    return;
   }
-  return{err:'quota',lastErr};
+  box.innerHTML=_aiMsgs.map(m=>`<div class="ai-msg-${m.role==='user'?'u':'a'}${m.thinking?' thinking':''}">${m.text.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`).join('');
+  box.scrollTop=box.scrollHeight;
 }
 
-async function _tryOpenRouter(key, prompt, out){
-  // Confirmed free models from OpenRouter API (May 2026) — DeepSeek excluded for privacy
-  const MODELS=[
-    'google/gemma-4-31b-it:free',
-    'google/gemma-4-26b-a4b-it:free',
-    'nvidia/nemotron-3-super-120b-a12b:free',
-  ];
-  let lastErr='';
-  for(const model of MODELS){
-    try{
-      const label=model.split('/').pop();
-      out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ 연결 중 (${label})...</div>`;
-      const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`,
-          'HTTP-Referer':'https://hilliardbuffshire.github.io/hilliard-trading/','X-Title':'HB Trading Dashboard'},
-        body:JSON.stringify({model,messages:[{role:'user',content:prompt}],max_tokens:800,temperature:.7})
-      });
-      if(!resp.ok){
-        const e=await resp.json();const msg=e.error?.message||resp.statusText;
-        if(resp.status===401||resp.status===403)return{err:'auth',msg};
-        lastErr=`${label}: ${msg.slice(0,120)}`;continue;
-      }
-      const data=await resp.json();
-      const text=data.choices?.[0]?.message?.content||'';
-      if(text){_renderAiResult(out,text,label);return{ok:true};}
-      lastErr=`${label}: 빈 응답`;
-    }catch(e){lastErr=e.message?.slice(0,120)||'네트워크 오류';}
-  }
-  return{err:'quota',lastErr};
-}
+async function sendAiMsg(text){
+  const key=(localStorage.getItem('hb_ai_key')||'').trim();
+  const inp=document.getElementById('ai-inp');
+  const q=(text||(inp?.value||'')).trim();
+  if(!q)return;
+  if(inp)inp.value='';
 
-async function genGeminiInsights(){
-  const key=(localStorage.getItem('hb_gemini_key')||'').trim();
-  const out=document.getElementById('gemini-insights-out');
   if(!key){
-    out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">API Key를 입력해주세요.<br><span style="color:var(--tx2)">무료: <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--ac)">OpenRouter (sk-or-...)</a> · <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">Gemini (AIza...)</a></span></div>`;
+    _aiMsgs.push({role:'ai',text:'Gemini API Key를 입력해주세요.\n\n⚙️ 설정 버튼을 누른 후 Google AI Studio(aistudio.google.com/app/apikey)에서 발급한 키(AIza...)를 입력하세요.'});
+    renderAiMsgs();
+    document.getElementById('ai-panel-cfg').style.display='block';
     return;
   }
-  const prompt=_buildAiPrompt();
-  const isOpenRouter=key.startsWith('sk-or-');
-  const result=isOpenRouter ? await _tryOpenRouter(key,prompt,out) : await _tryGemini(key,prompt,out);
-  if(result.ok)return;
-  if(result.err==='auth'){
-    out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">인증 오류: API Key를 확인하세요.<br><span style="font-size:.76rem;opacity:.7">${(result.msg||'').replace(/</g,'&lt;').slice(0,200)}</span></div>`;
-    return;
+
+  _aiMsgs.push({role:'user',text:q});
+  _aiMsgs.push({role:'ai',text:'⏳ 분석 중…',thinking:true});
+  renderAiMsgs();
+
+  const ctx=buildTradingCtx();
+  const history=_aiMsgs.slice(0,-1).filter(m=>!m.thinking).slice(-8).map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.text}]}));
+  const contents=[{role:'user',parts:[{text:ctx}]},...history,{role:'user',parts:[{text:q}]}];
+
+  try{
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${_aiModel}:generateContent?key=${key}`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents,generationConfig:{temperature:.7,maxOutputTokens:1024}})
+    });
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const reply=d.candidates?.[0]?.content?.parts?.[0]?.text||'응답 없음';
+    _aiMsgs[_aiMsgs.length-1]={role:'ai',text:reply};
+  }catch(e){
+    _aiMsgs[_aiMsgs.length-1]={role:'ai',text:'❌ '+e.message+'\n\nAPI Key와 모델을 확인해주세요. ⚙️ 설정에서 변경 가능합니다.'};
   }
-  // Both providers exhausted — suggest switching
-  const altLink=isOpenRouter
-    ?`<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">Gemini Key 발급 →</a>`
-    :`<a href="https://openrouter.ai/keys" target="_blank" style="color:var(--ac)">OpenRouter 무료 Key(sk-or-...) 발급 →</a>`;
-  out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">연결 실패. ${altLink}<br><span style="font-size:.76rem;opacity:.7">${(result.lastErr||'').replace(/</g,'&lt;').slice(0,200)}</span></div>`;
+  renderAiMsgs();
 }
+
+function initAiPanel(){
+  const key=localStorage.getItem('hb_ai_key')||'';
+  const keyInp=document.getElementById('ai-key-inp');
+  if(keyInp){keyInp.value=key;}
+  const ind=document.getElementById('ai-model-ind');
+  if(ind)ind.textContent=_aiModel;
+  if(key)detectAiModel(key);
+  renderAiMsgs();
+  const inp=document.getElementById('ai-inp');
+  if(inp){inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAiMsg();}});}
+}
+document.addEventListener('DOMContentLoaded',initAiPanel);
 
 /* ── Journal Spreadsheet ── */
 let jnlSortAsc=false;
@@ -3121,6 +3115,38 @@ window.undoImport=async function(){
     toast('가져오기 취소됨','ok');
   }catch(e){toast('되돌리기 실패','err');}
 };
+
+/* ── AI Coach Panel HTML injection ── */
+(()=>{
+  const fab=document.createElement('button');
+  fab.id='ai-fab';fab.title='AI 트레이딩 코치';fab.innerHTML='🤖';fab.onclick=toggleAiChat;
+  const panel=document.createElement('div');
+  panel.id='ai-panel';
+  panel.innerHTML=`
+    <div id="ai-panel-hd">
+      <span style="font-size:1.1rem">🤖</span>
+      <span style="font-weight:600;font-size:.9rem;flex:1">AI 트레이딩 코치</span>
+      <button onclick="toggleAiCfg()" title="설정" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:1rem;padding:2px 6px">⚙️</button>
+      <button onclick="toggleAiChat()" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:1.1rem;padding:2px 6px">✕</button>
+    </div>
+    <div id="ai-panel-cfg">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="password" id="ai-key-inp" placeholder="Gemini API Key (AIza...)" style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:6px 10px;font-family:inherit;font-size:.80rem;outline:none">
+        <button onclick="(()=>{const k=document.getElementById('ai-key-inp').value.trim();if(k){localStorage.setItem('hb_ai_key',k);detectAiModel(k);}})()" style="background:var(--ac);border:none;border-radius:6px;color:var(--bg);padding:6px 12px;cursor:pointer;font-size:.80rem;font-family:inherit">저장</button>
+      </div>
+      <div style="font-size:.72rem;color:var(--tx2);margin-top:6px">모델: <span id="ai-model-ind" style="color:var(--ac)">감지 중…</span> &nbsp;·&nbsp; <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">키 발급 →</a></div>
+    </div>
+    <div id="ai-panel-msgs"></div>
+    <div id="ai-panel-qs">
+      ${['📊 내 매매 종합 분석','🎯 지금 당장 개선할 점','📅 요일별 전략 제안','🛡️ 손실 방어 방법','📐 포지션 사이징 조언','💡 승률 높이는 방법'].map(q=>`<button class="ai-q-chip" onclick="sendAiMsg('${q}')">${q}</button>`).join('')}
+    </div>
+    <div id="ai-panel-bot">
+      <textarea id="ai-inp" rows="2" placeholder="트레이딩에 대해 물어보세요... (Enter 전송)"></textarea>
+      <button onclick="sendAiMsg()" style="background:var(--ac);border:none;border-radius:8px;color:var(--bg);padding:0 14px;cursor:pointer;font-size:1.1rem;flex-shrink:0">↑</button>
+    </div>`;
+  document.body.appendChild(fab);
+  document.body.appendChild(panel);
+})();
 
 /* Import drag-drop */
 (()=>{
