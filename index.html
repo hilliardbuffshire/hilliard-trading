@@ -902,10 +902,11 @@ function renderDashboard(){
         if(t==='l'&&streak>maxL)maxL=streak;
       });
       // Best month
-      const byM2={};
-      journal.forEach(e=>{const m=e.date?.slice(0,7);if(!m)return;if(!byM2[m])byM2[m]=0;byM2[m]+=+(e.profit||0);});
-      const bestM=Object.entries(byM2).sort((a,b)=>b[1]-a[1])[0];
-      const worstM=Object.entries(byM2).sort((a,b)=>a[1]-b[1])[0];
+      const jGrossW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
+      const jGrossL=Math.abs(active.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit||0),0));
+      const jPF=jGrossL?(jGrossW/jGrossL).toFixed(2):jGrossW?'∞':'—';
+      const jAvgW=jWin?(jGrossW/jWin).toFixed(2):0;
+      const jAvgL=jLoss?(jGrossL/jLoss).toFixed(2):0;
       const uName=getCurUser()?.name||'일지';
       jnlEl.innerHTML=`
         <div class="section-label" style="margin-top:20px;margin-bottom:10px">📋 ${uName} 매매일지 통계</div>
@@ -917,8 +918,8 @@ function renderDashboard(){
           <div class="stat-card c-red"><div class="stat-label">시드 MDD</div><div class="stat-value">-${smdd.toFixed(2)}%</div></div>
           <div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">${maxW}일</div></div>
           <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div></div>
-          ${bestM?`<div class="stat-card c-green"><div class="stat-label">최고 수익월</div><div class="stat-value" style="font-size:1.1rem">${bestM[0]}</div><div class="stat-sub pos">+$${fmtN(bestM[1])}</div></div>`:''}
-          ${worstM&&worstM[0]!==bestM?.[0]?`<div class="stat-card c-red"><div class="stat-label">최저 수익월</div><div class="stat-value" style="font-size:1.1rem">${worstM[0]}</div><div class="stat-sub neg">-$${fmtN(Math.abs(worstM[1]))}</div></div>`:''}
+          <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
+          <div class="stat-card"><div class="stat-label">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$${fmtN(jAvgW)}</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$${fmtN(jAvgL)}</span></div><div class="stat-sub">수익${jWin}일 · 손실${jLoss}일</div></div>
         </div>`;
     } else {
       jnlEl.innerHTML='';
