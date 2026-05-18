@@ -985,6 +985,7 @@ const JNL_COLS=[
     get:e=>e.totalSeed,
     upd:v=>({totalSeed:+v||0})},
   {key:'krwSeed',       label:'원화시드(₩)', fmt:'krw', readonly:true,
+    autoFillDesc:'총시드 × 테더 자동계산 (읽기전용)',
     computed:e=>{const s=+e.totalSeed||0,t=+e.tether||0;return s&&t?Math.round(s*t):null;}},
   // P&L (Col J, K, N, O, P)
   {key:'profit',        label:'수익금($)',   fmt:'pnl',
@@ -1066,7 +1067,7 @@ window.renderJournal=function(){
     <th class="jnl-n">#</th>
     <th class="jnl-sort-th" onclick="jnlSortToggle()" title="클릭으로 정렬 전환">날짜 ${jnlSortAsc?'↑':'↓'}</th>
     ${allCols.map(c=>{
-      if(c.readonly)return`<th style="color:var(--tx2);font-style:italic" data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}</th>`;
+      if(c.readonly)return`<th style="color:var(--tx2);font-style:italic" data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)" title="${c.autoFillDesc||'자동계산'}">${c.label}<span class="jnl-auto-badge" title="${c.autoFillDesc||'자동계산'}">∑</span></th>`;
       if(c.isCustom)return`<th data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}<button class="jnl-col-del" onclick="delJnlCol('${c.customId}')" title="열 삭제">✕</button></th>`;
       const autoDesc=c.autoFillDesc||'자동입력';
       const autoBadge=c.autoFill?`<span class="jnl-auto-badge" title="${autoDesc}">⚡</span>`:'';
@@ -1228,6 +1229,44 @@ window.jnlEdit=function(span){
         if(row){const comp=row.querySelector('.jnl-computed');
           if(comp){const krwCol=JNL_COLS.find(c=>c.key==='krwSeed');
             if(krwCol?.computed){const v=krwCol.computed(entry);comp.innerHTML=v!=null?jnlFmt(v,'krw'):'<span style="opacity:.35">—</span>';}}}
+      }
+      // carry-forward: propagate close→open / totalSeed→seedStart to next row
+      const carryMap={upbit:'upbitOpen',bithumb:'bithumbOpen',binance:'binanceOpen',totalSeed:'seedStart'};
+      if(carryMap[key]){
+        const sorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+        const idx=sorted.findIndex(e=>e.id===id);
+        const nextEntry=idx>=0?sorted[idx+1]:null;
+        if(nextEntry){
+          let nextUpdate={};
+          let nextLocalKey=null;
+          if(key==='upbit'){nextUpdate={'exchanges.upbit.open':+newRaw||0};nextLocalKey='upbitOpen';}
+          else if(key==='bithumb'){nextUpdate={'exchanges.bithumb.open':+newRaw||0};nextLocalKey='bithumbOpen';}
+          else if(key==='binance'){nextUpdate={'exchanges.binance.open':+newRaw||0};nextLocalKey='binanceOpen';}
+          else if(key==='totalSeed'){nextUpdate={seedStart:+newRaw||0};nextLocalKey='seedStart';}
+          if(Object.keys(nextUpdate).length){
+            try{
+              await db.collection('trading_journal').doc(nextEntry.id).update(nextUpdate);
+              // update local journal object
+              for(const[k,v]of Object.entries(nextUpdate)){
+                if(k.includes('.')){const p=k.split('.');
+                  if(p.length===3)nextEntry[p[0]]={...nextEntry[p[0]],[p[1]]:{...(nextEntry[p[0]]?.[p[1]]||{}),[p[2]]:v}};
+                  else if(p.length===2)nextEntry[p[0]]={...nextEntry[p[0]],[p[1]]:v};
+                }else nextEntry[k]=v;
+              }
+              // update DOM cell in next row
+              const nextTr=document.querySelector(`#jnl-sheet-body tr[data-id="${nextEntry.id}"]`);
+              if(nextTr){
+                const nextSpan=nextTr.querySelector(`.jnl-cell-view[data-key="${nextLocalKey}"]`);
+                if(nextSpan){
+                  const nextCol=JNL_COLS.find(c=>c.key===nextLocalKey);
+                  const nv=nextCol?.get(nextEntry);
+                  nextSpan.innerHTML=jnlFmt(nv,nextCol?.fmt);
+                  nextSpan.dataset.val=String(nv??'');
+                }
+              }
+            }catch(e){console.error('carry-forward 실패',e);}
+          }
+        }
       }
       renderJnlMonthlySummary();
     }catch(err){console.error(err);toast('저장 실패','err');}
