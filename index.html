@@ -987,8 +987,8 @@ function renderDashboard(){
 
 /* ── Journal Spreadsheet ── */
 let jnlSortAsc=false;
-function getCustomCols(){try{return JSON.parse(localStorage.getItem('hb_jnl_custom_cols'))||[];}catch{return[];}}
-function saveCustomCols(c){localStorage.setItem('hb_jnl_custom_cols',JSON.stringify(c));}
+function getCustomCols(){try{return JSON.parse(localStorage.getItem('hb_jnl_custom_cols_'+getCurUid()))||[];}catch{return[];}}
+function saveCustomCols(c){localStorage.setItem('hb_jnl_custom_cols_'+getCurUid(),JSON.stringify(c));}
 
 const JNL_COLS=[
   // Exchange open → close (Col B/C, D/E, F/G) — open is auto carry-forward
@@ -1043,7 +1043,8 @@ const JNL_COLS=[
   {key:'personalCumPnl',label:'개인누적',    fmt:'pnl',
     get:e=>e.personalCumPnl,
     upd:v=>({personalCumPnl:+v||0})},
-  {key:'stopAlert',     label:'강제종료',    fmt:'txt',
+  {key:'stopAlert',     label:'강제종료',    fmt:'stop',
+    dropdown:['','▲ WARNING','● DAY STOP','STOP+REST'],
     get:e=>e.stopAlert,
     upd:v=>({stopAlert:v})},
   {key:'memo',          label:'비고/사유',   fmt:'txt',
@@ -1060,6 +1061,10 @@ function jnlFmt(val,fmt){
     case'pnl':{const n=+val;if(!n)return'<span style="color:var(--tx2);opacity:.35">—</span>';return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':'-'}$${fmtN(Math.abs(n))}</span>`;}
     case'pct':{const n=+val;return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':''}${n.toFixed(2)}%</span>`;}
     case'txt': return String(val).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    case'stop':{const s=String(val);if(!s)return'<span style="color:var(--tx2);opacity:.35">—</span>';
+      const cls=s.includes('DAY STOP')?'red':s.includes('WARNING')?'orange':'purple';
+      const colors={red:'var(--red)',orange:'#e0a060',purple:'var(--ac)'};
+      return`<span style="color:${colors[cls]};font-weight:600;font-size:.72rem">${s}</span>`;}
     default:   return val;
   }
 }
@@ -1233,21 +1238,34 @@ window.jnlEdit=function(span){
     if(col?.readonly)return; // skip readonly cols
   }
 
-  const isTxt=!isDate&&col?.fmt==='txt';
-  const inp=document.createElement('input');
-  inp.className='jnl-cell-input';
-  inp.type=isDate?'date':isTxt?'text':'number';
-  inp.value=curRaw==='—'?'':curRaw;
-  if(!isDate&&!isTxt)inp.step='any';
+  const isTxt=!isDate&&(col?.fmt==='txt'||col?.fmt==='stop');
+  const isDropdown=!isDate&&!isCustCol&&!!col?.dropdown;
+  let inp;
+  if(isDropdown){
+    inp=document.createElement('select');
+    inp.className='jnl-cell-input';
+    col.dropdown.forEach(opt=>{
+      const o=document.createElement('option');
+      o.value=opt;o.textContent=opt||'(없음)';
+      if(opt===(curRaw==='—'?'':curRaw))o.selected=true;
+      inp.appendChild(o);
+    });
+  }else{
+    inp=document.createElement('input');
+    inp.className='jnl-cell-input';
+    inp.type=isDate?'date':isTxt?'text':'number';
+    inp.value=curRaw==='—'?'':curRaw;
+    if(!isDate&&!isTxt)inp.step='any';
+  }
   // Overlay: keep span visible, input positioned absolute on top → no layout jump
   span.dataset.editing='1';
   span.parentElement.appendChild(inp);
-  requestAnimationFrame(()=>{inp.focus();inp.select();});
+  requestAnimationFrame(()=>{inp.focus();if(inp.tagName!=='SELECT')inp.select();});
   _jnlLastSpan=span; // track for global paste
 
   async function commit(){
     let newRaw=inp.value.trim();
-    if(newRaw.startsWith('='))newRaw=String(jnlEvalFormula(newRaw));
+    if(!isDropdown&&newRaw.startsWith('='))newRaw=String(jnlEvalFormula(newRaw));
     inp.remove();delete span.dataset.editing;
     if(newRaw===curRaw)return;
     const entry=journal.find(e=>e.id===id);if(!entry)return;
@@ -1350,6 +1368,9 @@ window.jnlEdit=function(span){
     }catch(err){console.error(err);toast('저장 실패','err');}
   }
   inp.addEventListener('blur',commit);
+  if(isDropdown){
+    inp.addEventListener('change',()=>inp.blur()); // select immediately commits on pick
+  }
   inp.addEventListener('keydown',ev=>{
     if(ev.key==='Enter'){ev.preventDefault();inp.blur();}
     if(ev.key==='Escape'){inp.removeEventListener('blur',commit);inp.remove();delete span.dataset.editing;}
@@ -1361,7 +1382,7 @@ window.jnlEdit=function(span){
   });
 
   // ── Excel paste: multi-row/multi-col (delegates to _doJnlPaste) ──
-  inp.addEventListener('paste',async ev=>{
+  if(!isDropdown)inp.addEventListener('paste',async ev=>{
     const raw=(ev.clipboardData||window.clipboardData).getData('text/plain');
     const rows=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(r=>r!=='');
     if(rows.length<=1&&!rows[0]?.includes('\t'))return; // single value → default paste
@@ -1506,8 +1527,8 @@ window.toggleJnlPanel=function(){
 window.jnlSortToggle=function(){jnlSortAsc=!jnlSortAsc;renderJournal();};
 
 /* Column drag-to-reorder */
-function getColOrder(){try{const s=localStorage.getItem('hb_jnl_col_order');return s?JSON.parse(s):null;}catch{return null;}}
-function saveColOrder(keys){localStorage.setItem('hb_jnl_col_order',JSON.stringify(keys));}
+function getColOrder(){try{const s=localStorage.getItem('hb_jnl_col_order_'+getCurUid());return s?JSON.parse(s):null;}catch{return null;}}
+function saveColOrder(keys){localStorage.setItem('hb_jnl_col_order_'+getCurUid(),JSON.stringify(keys));}
 function getOrderedCols(cols){
   const order=getColOrder();
   if(!order?.length)return cols;
