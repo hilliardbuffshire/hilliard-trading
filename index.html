@@ -81,9 +81,9 @@
 
     .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:14px;margin-bottom:24px}
     .stat-card{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;transition:background .3s,border-color .3s}
-    .stat-label{font-size:.72rem;color:var(--tx2);margin-bottom:8px;letter-spacing:.05em;text-transform:uppercase}
-    .stat-value{font-size:1.5rem;font-weight:600}
-    .stat-sub{font-size:.75rem;color:var(--tx2);margin-top:3px}
+    .stat-label{font-size:.78rem;color:var(--tx2);margin-bottom:8px;letter-spacing:.05em;text-transform:uppercase}
+    .stat-value{font-size:1.6rem;font-weight:600}
+    .stat-sub{font-size:.80rem;color:var(--tx2);margin-top:3px}
     .c-green{border-color:rgba(76,175,122,.4)!important}.c-green .stat-value{color:var(--green)}
     .c-red{border-color:rgba(207,102,121,.4)!important}.c-red .stat-value{color:var(--red)}
     .c-ac .stat-value{color:var(--ac-l)}
@@ -403,6 +403,7 @@
         <div class="chart-card"><h3>누적 수익률 추이</h3><canvas id="chart-cumulative"></canvas></div>
         <div class="chart-card"><h3>승률</h3><canvas id="chart-winrate"></canvas></div>
       </div>
+      <div class="chart-card" style="margin-bottom:22px"><h3>📈 시드 변화 추이 (총시드 $)</h3><canvas id="chart-seed-curve"></canvas></div>
       <div class="table-card">
         <div class="table-card-hdr"><h3>최근 매매기록</h3><button class="btn btn-secondary btn-sm" onclick="goTo('trades')">전체보기</button></div>
         <div class="tbl-wrap"><table>
@@ -475,6 +476,15 @@
         <div id="jnl-month-wrap" class="jnl-month-wrap">
           <div id="jnl-month-inner"></div>
         </div>
+      </div>
+      <!-- Date range filter + Import button -->
+      <div class="filter-bar" style="margin-bottom:10px">
+        <label style="font-size:.76rem;color:var(--tx2);white-space:nowrap">기간</label>
+        <input type="date" id="jnl-filter-from" onchange="renderJournal()" style="background:var(--bg2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 8px;font-size:.78rem;font-family:inherit">
+        <span style="color:var(--tx2);font-size:.78rem">~</span>
+        <input type="date" id="jnl-filter-to" onchange="renderJournal()" style="background:var(--bg2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 8px;font-size:.78rem;font-family:inherit">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('jnl-filter-from').value='';document.getElementById('jnl-filter-to').value='';renderJournal()">전체</button>
+        <button class="btn btn-secondary btn-sm" onclick="importJournalAsTrades()" title="매매일지 데이터를 매매기록(BTCUSDT)으로 변환">📥 일지→매매기록</button>
       </div>
       <!-- Spreadsheet table -->
       <div class="table-card" style="overflow:visible">
@@ -954,11 +964,11 @@ function renderDashboard(){
               const wr2=Math.round(ds[d].win/ds[d].n*100);
               const avg2=+(ds[d].pnl/ds[d].n).toFixed(1);
               const cls=wr2>=50?'pos':'neg';
-              return`<div style="background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center;min-width:52px;flex:1">
-                <div style="font-size:.65rem;color:var(--tx2);margin-bottom:2px">${d}요일</div>
-                <div style="font-size:.80rem;font-weight:700" class="${cls}">${wr2}%</div>
-                <div style="font-size:.60rem;color:var(--tx2)">${ds[d].n}일</div>
-                <div style="font-size:.60rem" class="${avg2>=0?'pos':'neg'}">${avg2>=0?'+':'-'}$${fmtN(Math.abs(avg2))}</div>
+              return`<div style="background:var(--bg3);border-radius:8px;padding:12px 10px;text-align:center;min-width:58px;flex:1">
+                <div style="font-size:.80rem;color:var(--tx2);margin-bottom:4px;font-weight:500">${d}</div>
+                <div style="font-size:1.15rem;font-weight:700;line-height:1.1" class="${cls}">${wr2}%</div>
+                <div style="font-size:.74rem;color:var(--tx2);margin-top:4px">${ds[d].n}일</div>
+                <div style="font-size:.78rem;font-weight:500;margin-top:2px" class="${avg2>=0?'pos':'neg'}">${avg2>=0?'+':'-'}$${fmtN(Math.abs(avg2))}</div>
               </div>`;
             }).join('');
           })()}
@@ -979,7 +989,7 @@ function renderDashboard(){
             if(maxW>=3)insights.push({c:'var(--pos)',t:`🟢 최장 연승 ${maxW}일은 상승 모멘텀이 있음을 시사합니다. 연승 기간에는 리스크를 적절히 활용하되 과도한 레버리지는 주의하세요.`});
             const breakEvenWr=avgW2&&avgL2?Math.ceil(avgL2/(avgL2+avgW2)*100):null;
             if(breakEvenWr&&wr2<breakEvenWr)insights.push({c:'rgba(255,180,0,.8)',t:`📐 현재 R:R 기준 손익분기 승률: ${breakEvenWr}% (현재 ${wr2}%). ${breakEvenWr-wr2}%p 개선 필요합니다.`});
-            return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:9px 12px;border-left:3px solid ${i.c};font-size:.78rem;line-height:1.55">${i.t}</div>`).join('');
+            return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid ${i.c};font-size:.84rem;line-height:1.6">${i.t}</div>`).join('');
           })()}
         </div>`;
     } else {
@@ -1003,6 +1013,9 @@ function renderDashboard(){
   }).join('')||`<tr><td colspan="7" class="empty">기록 없음</td></tr>`;
   mkLine('chart-cumulative',trades.map(t=>t.date),trades.map(t=>+t.cumulative||0));
   mkDonut('chart-winrate',wins.length,losses.length);
+  // Seed curve from journal
+  const _seedRows=[...journal].filter(e=>+e.totalSeed>0).sort((a,b)=>a.date>b.date?1:-1);
+  mkLine('chart-seed-curve',_seedRows.map(e=>e.date),_seedRows.map(e=>+e.totalSeed||0));
 }
 
 /* ── Journal Spreadsheet ── */
@@ -1058,7 +1071,8 @@ const JNL_COLS=[
     autoFillDesc:'총시드 + 출입금 - 시드시작 자동계산 (출금/입금 보정 포함)',
     get:e=>e.profit,
     upd:v=>({profit:+v||0})},
-  {key:'rate',          label:'수익률',      fmt:'pct',
+  {key:'rate',          label:'수익률',      fmt:'pct', autoFill:true,
+    autoFillDesc:'수익금 ÷ 시드시작 × 100 자동계산',
     get:e=>e.rate,
     upd:v=>({rate:+v||0})},
   {key:'personalPnl',   label:'개인손익',    fmt:'pnl',
@@ -1150,7 +1164,13 @@ window.renderJournal=function(){
   </tr>`;
 
   // Sort data
-  const data=[...journal].sort((a,b)=>{
+  const _ffrom=document.getElementById('jnl-filter-from')?.value||'';
+  const _fto=document.getElementById('jnl-filter-to')?.value||'';
+  const data=[...journal].filter(e=>{
+    if(_ffrom&&e.date<_ffrom)return false;
+    if(_fto&&e.date>_fto)return false;
+    return true;
+  }).sort((a,b)=>{
     if(jnlSortAsc)return a.date>b.date?1:a.date<b.date?-1:0;
     return b.date>a.date?1:b.date<a.date?-1:0;
   });
@@ -1346,6 +1366,20 @@ window.jnlEdit=function(span){
           }
         }
       }
+      // ── Auto-compute rate = profit / seedStart × 100 ──
+      const _rDeps=[..._pDeps,'profit'];
+      if((_rDeps.includes(key)&&!isDate)||_newTS!==null){
+        const rP=+entry.profit||0,rS=+entry.seedStart||0;
+        if(rS){
+          const _newR=+((rP/rS)*100).toFixed(4);
+          if(Math.abs(_newR-(+entry.rate||0))>0.001){
+            entry.rate=_newR;
+            await db.collection('trading_journal').doc(id).update({rate:_newR});
+            const rSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="rate"]');
+            if(rSpan){rSpan.innerHTML=jnlFmt(_newR,'pct');rSpan.dataset.val=String(_newR);}
+          }
+        }
+      }
       // ── Carry-forward: close→next open, totalSeed→next seedStart, totalSeed→next profit ──
       const _jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
       const _idx=_jnlSorted.findIndex(e=>e.id===id);
@@ -1404,6 +1438,17 @@ window.jnlEdit=function(span){
       const cur=tds.indexOf(span.parentElement);
       const nxt=tds.slice(cur+1).map(td=>td.querySelector('.jnl-cell-view:not(.jnl-computed)')).find(Boolean);
       if(nxt)setTimeout(()=>nxt.click(),30);}
+    if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ev.preventDefault();
+      const curTr=span.closest('tr');
+      const curTd=span.parentElement;
+      const colIdx=[...curTr.querySelectorAll('td')].indexOf(curTd);
+      const targetTr=ev.key==='ArrowDown'?curTr.nextElementSibling:curTr.previousElementSibling;
+      if(targetTr&&!targetTr.classList.contains('jnl-month-sep')){
+        const targetTd=[...targetTr.querySelectorAll('td')][colIdx];
+        const targetSpan=targetTd?.querySelector('.jnl-cell-view:not(.jnl-computed)');
+        if(targetSpan){inp.removeEventListener('blur',commit);inp.blur();setTimeout(()=>targetSpan.click(),30);}
+      }
+    }
   });
 
   // ── Excel paste: multi-row/multi-col (delegates to _doJnlPaste) ──
@@ -1415,6 +1460,40 @@ window.jnlEdit=function(span){
     inp.removeEventListener('blur',commit);inp.remove();delete span.dataset.editing;
     await _doJnlPaste(raw,span);
   });
+};
+
+window.importJournalAsTrades=async function(){
+  const active=journal.filter(e=>+e.rate!==0&&e.date);
+  if(!active.length){toast('변환할 일지 데이터 없음','err');return;}
+  if(!confirm(`매매일지 ${active.length}건을 매매기록(BTCUSDT)으로 변환합니다.\n기존 BTCUSDT 일지 변환 기록은 덮어쓰지 않습니다. 계속하시겠습니까?`))return;
+  const KD=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+  const uid=getCurUid();
+  let written=0;
+  toast(`${active.length}건 변환 중…`,'ok');
+  const CHUNK=500;
+  for(let i=0;i<active.length;i+=CHUNK){
+    const b=db.batch();
+    active.slice(i,i+CHUNK).forEach(e=>{
+      const pnl=+e.rate||0;
+      const dayLabel=KD[new Date(e.date+'T12:00:00').getDay()];
+      const ref=db.collection('trading_trades').doc();
+      b.set(ref,{
+        date:e.date,symbol:'BTCUSDT',direction:'롱',
+        entry:0,exit:0,pnl,
+        result:pnl>0?'승':pnl<0?'패':'진행중',
+        entryDay:dayLabel,exitDay:dayLabel,
+        size:'',duration:'1D',
+        memo:e.memo?`[일지] ${e.memo}`:'[일지 기반]',
+        userId:uid,cumulative:0,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      written++;
+    });
+    await b.commit();
+  }
+  await fetchTrades();await recalcCumulatives();
+  renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();
+  toast(`${written}건 매매기록으로 변환 완료`,'ok');
 };
 
 window.addJnlRow=async function(){
