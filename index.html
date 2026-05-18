@@ -1094,10 +1094,15 @@ function renderDashboard(){
             return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid ${i.c};font-size:.84rem;line-height:1.6">${i.t}</div>`).join('');
           })()}
         </div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="font-size:.74rem;color:var(--tx2)">🤖 Gemini AI 인사이트</div>
-          <input type="password" id="gemini-key-inp" placeholder="Gemini API Key (AIza...)" value="${localStorage.getItem('hb_gemini_key')||''}" style="flex:1;min-width:180px;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 9px;font-family:inherit;font-size:.78rem" onchange="localStorage.setItem('hb_gemini_key',this.value)">
-          <button class="btn btn-secondary btn-sm" onclick="genGeminiInsights()">✨ AI 분석 생성</button>
+        <div style="margin-top:12px;background:var(--bg3);border-radius:10px;padding:12px 14px;border:1px solid var(--bd)">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="font-size:.80rem;font-weight:500">🤖 AI 트레이딩 코치</div>
+            <input type="password" id="gemini-key-inp" placeholder="Gemini (AIza...) 또는 OpenRouter (sk-or-...)" value="${localStorage.getItem('hb_gemini_key')||''}" style="flex:1;min-width:220px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:6px 10px;font-family:inherit;font-size:.80rem" onchange="localStorage.setItem('hb_gemini_key',this.value)">
+            <button class="btn btn-secondary btn-sm" onclick="genGeminiInsights()" style="white-space:nowrap">✨ 분석 생성</button>
+          </div>
+          <div style="font-size:.72rem;color:var(--tx2);margin-top:7px;line-height:1.7">
+            무료 키 발급 → <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--ac)">OpenRouter</a> (sk-or-... / 무료 모델 제공) · <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">Google AI Studio</a> (AIza... / 유료 플랜 필요할 수 있음)
+          </div>
         </div>
         <div id="gemini-insights-out" style="margin-top:8px"></div>`;
     } else {
@@ -1199,19 +1204,13 @@ function renderDashboard(){
   }
 }
 
-/* ── Gemini AI Insights ── */
-async function genGeminiInsights(){
-  const key=(localStorage.getItem('hb_gemini_key')||'').trim();
-  const out=document.getElementById('gemini-insights-out');
-  if(!key){out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">Gemini API Key를 입력해주세요. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">발급받기 →</a></div>`;return;}
-  out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ AI 분석 중...</div>`;
-
+/* ── AI Insights (Gemini + OpenRouter) ── */
+function _buildAiPrompt(){
   const jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
   const active=jnlSorted.filter(e=>+e.profit!==0);
   const jWin=active.filter(e=>+e.profit>0).length;
   const jLoss=active.filter(e=>+e.profit<0).length;
   const jWr=active.length?(jWin/active.length*100).toFixed(1):0;
-  const cumP=active.reduce((a,e)=>a+(+e.profit||0),0);
   const jGrossW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
   const jGrossL=Math.abs(active.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit||0),0));
   const jAvgW=jWin?(jGrossW/jWin).toFixed(2):0;
@@ -1225,52 +1224,100 @@ async function genGeminiInsights(){
   const dayStats=KD.filter(d=>ds[d].n>=3).map(d=>`${d}:${Math.round(ds[d].win/ds[d].n*100)}%`).join(' ');
   const byM={};active.forEach(e=>{const m=e.date?.slice(0,7);if(!m)return;if(!byM[m])byM[m]={n:0,p:0};byM[m].n++;byM[m].p+=+e.profit||0;});
   const mSummary=Object.entries(byM).sort(([a],[b])=>b>a?1:-1).slice(0,3).map(([m,v])=>`${m.slice(5)}월:${v.n}일 ${v.p>=0?'+':''}$${v.p.toFixed(0)}`).join(' ');
-
-  const prompt=`트레이딩 코치로서 아래 데이터 기반 Next Action 4개를 한국어로 코칭하세요. 각각 이모지+제목: 설명 형태, 마크다운 없이.
+  return `트레이딩 코치로서 아래 데이터 기반 Next Action 4개를 한국어로 코칭하세요. 각각 이모지+제목: 설명 형태, 마크다운 없이.
 승률:${jWr}% 수익일${jWin}/손실일${jLoss} 평균수익$${jAvgW}/평균손실$${jAvgL} P-Factor:${jPF} EV:${jEV>=0?'+':''}$${jEV} 시드:$${fmtN(latestSeed)} 요일:${dayStats||'없음'} 최근:${mSummary||'없음'}`;
+}
 
-  // Model fallback chain: try free-tier-friendly models first
+function _renderAiResult(out, text, modelLabel){
+  const lines=text.split('\n').map(s=>s.trim()).filter(s=>s.length>10);
+  out.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:.72rem;color:var(--tx2);margin-bottom:2px">via ${modelLabel}</div>
+    ${lines.map(l=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid rgba(100,180,255,.7);font-size:.84rem;line-height:1.6">${l.replace(/</g,'&lt;')}</div>`).join('')}
+  </div>`;
+}
+
+async function _tryGemini(key, prompt, out){
+  // Correct API versions: 2.x → v1beta, 1.5 → v1
   const MODELS=[
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent',
-    'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent',
+    {url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent',name:'gemini-2.0-flash-lite'},
+    {url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',name:'gemini-2.0-flash'},
+    {url:'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',name:'gemini-1.5-flash'},
+    {url:'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent',name:'gemini-1.5-flash-latest'},
   ];
-
   let lastErr='';
-  for(const url of MODELS){
-    const modelName=url.match(/models\/([^:]+)/)?.[1]||url;
+  for(const {url,name} of MODELS){
     try{
-      out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ 연결 중 (${modelName})...</div>`;
-      const resp=await fetch(`${url}?key=${key}`,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:800}})
-      });
+      out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ 연결 중 (${name})...</div>`;
+      const resp=await fetch(`${url}?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:800}})});
       if(!resp.ok){
-        const e=await resp.json();
-        const msg=e.error?.message||resp.statusText;
-        // quota / not-found → try next model; auth error → stop
-        if(resp.status===401||resp.status===403){throw new Error(msg);}
-        lastErr=`${modelName}: ${msg}`;
-        continue;
+        const e=await resp.json();const msg=e.error?.message||resp.statusText;
+        if(resp.status===400&&msg.includes('API key'))return{err:'auth'};
+        if(resp.status===401||resp.status===403)return{err:'auth',msg};
+        lastErr=`${name}: ${msg.slice(0,120)}`;continue;
       }
       const data=await resp.json();
-      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'응답 없음';
-      const lines=text.split('\n').map(s=>s.trim()).filter(s=>s.length>10);
-      out.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
-        <div style="font-size:.72rem;color:var(--tx2);margin-bottom:2px">모델: ${modelName}</div>
-        ${lines.map(l=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid rgba(100,180,255,.7);font-size:.84rem;line-height:1.6">${l.replace(/</g,'&lt;')}</div>`).join('')}
-      </div>`;
-      return;
-    }catch(e){
-      if(e.message&&(e.message.includes('401')||e.message.includes('403')||e.message.includes('API key'))){
-        out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">인증 오류: API Key를 확인하세요. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">발급받기 →</a></div>`;
-        return;
-      }
-      lastErr=e.message;
-    }
+      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      if(text){_renderAiResult(out,text,name);return{ok:true};}
+      lastErr=`${name}: 빈 응답`;
+    }catch(e){lastErr=e.message?.slice(0,120)||'네트워크 오류';}
   }
-  out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">모든 모델 쿼타 초과. 잠시 후 다시 시도하거나 <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">유료 플랜을 확인하세요 →</a><br><span style="font-size:.76rem;opacity:.7">${lastErr.replace(/</g,'&lt;').slice(0,200)}</span></div>`;
+  return{err:'quota',lastErr};
+}
+
+async function _tryOpenRouter(key, prompt, out){
+  // Confirmed free models from OpenRouter API (May 2026)
+  const MODELS=[
+    'deepseek/deepseek-v4-flash:free',
+    'google/gemma-4-31b-it:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+  ];
+  let lastErr='';
+  for(const model of MODELS){
+    try{
+      const label=model.split('/').pop();
+      out.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:12px 14px;font-size:.84rem;color:var(--tx2)">⏳ 연결 중 (${label})...</div>`;
+      const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`,
+          'HTTP-Referer':'https://hilliardbuffshire.github.io/hilliard-trading/','X-Title':'HB Trading Dashboard'},
+        body:JSON.stringify({model,messages:[{role:'user',content:prompt}],max_tokens:800,temperature:.7})
+      });
+      if(!resp.ok){
+        const e=await resp.json();const msg=e.error?.message||resp.statusText;
+        if(resp.status===401||resp.status===403)return{err:'auth',msg};
+        lastErr=`${label}: ${msg.slice(0,120)}`;continue;
+      }
+      const data=await resp.json();
+      const text=data.choices?.[0]?.message?.content||'';
+      if(text){_renderAiResult(out,text,label);return{ok:true};}
+      lastErr=`${label}: 빈 응답`;
+    }catch(e){lastErr=e.message?.slice(0,120)||'네트워크 오류';}
+  }
+  return{err:'quota',lastErr};
+}
+
+async function genGeminiInsights(){
+  const key=(localStorage.getItem('hb_gemini_key')||'').trim();
+  const out=document.getElementById('gemini-insights-out');
+  if(!key){
+    out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">API Key를 입력해주세요.<br><span style="color:var(--tx2)">무료: <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--ac)">OpenRouter (sk-or-...)</a> · <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">Gemini (AIza...)</a></span></div>`;
+    return;
+  }
+  const prompt=_buildAiPrompt();
+  const isOpenRouter=key.startsWith('sk-or-');
+  const result=isOpenRouter ? await _tryOpenRouter(key,prompt,out) : await _tryGemini(key,prompt,out);
+  if(result.ok)return;
+  if(result.err==='auth'){
+    out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">인증 오류: API Key를 확인하세요.<br><span style="font-size:.76rem;opacity:.7">${(result.msg||'').replace(/</g,'&lt;').slice(0,200)}</span></div>`;
+    return;
+  }
+  // Both providers exhausted — suggest switching
+  const altLink=isOpenRouter
+    ?`<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">Gemini Key 발급 →</a>`
+    :`<a href="https://openrouter.ai/keys" target="_blank" style="color:var(--ac)">OpenRouter 무료 Key(sk-or-...) 발급 →</a>`;
+  out.innerHTML=`<div style="background:var(--red-dim);border-radius:8px;padding:10px 14px;font-size:.84rem;color:var(--red)">연결 실패. ${altLink}<br><span style="font-size:.76rem;opacity:.7">${(result.lastErr||'').replace(/</g,'&lt;').slice(0,200)}</span></div>`;
 }
 
 /* ── Journal Spreadsheet ── */
