@@ -1266,9 +1266,8 @@ async function _tryGemini(key, prompt, out){
 }
 
 async function _tryOpenRouter(key, prompt, out){
-  // Confirmed free models from OpenRouter API (May 2026)
+  // Confirmed free models from OpenRouter API (May 2026) — DeepSeek excluded for privacy
   const MODELS=[
-    'deepseek/deepseek-v4-flash:free',
     'google/gemma-4-31b-it:free',
     'google/gemma-4-26b-a4b-it:free',
     'nvidia/nemotron-3-super-120b-a12b:free',
