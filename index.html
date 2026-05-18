@@ -322,6 +322,27 @@
     .import-file-zone input{display:none}
     .import-preview{max-height:260px;overflow-y:auto;margin-top:12px}
     .import-preview table{font-size:.74rem}
+
+    /* ── Formula Tooltip ── */
+    #ftip{position:fixed;background:rgba(8,8,18,.97);border:1px solid var(--bd);color:var(--tx);padding:9px 13px;border-radius:8px;font-size:.77rem;z-index:9900;pointer-events:none;max-width:300px;line-height:1.65;opacity:0;transition:opacity .12s;white-space:pre-wrap;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+    .tt{cursor:help;border-bottom:1px dashed rgba(180,160,100,.4);transition:border-color .15s}
+    .tt:hover{border-bottom-color:var(--ac)}
+
+    /* ── Alert Banner ── */
+    .loss-alert{background:var(--red-dim);border:1px solid rgba(207,102,121,.4);border-radius:10px;padding:13px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+    .loss-alert .la-icon{font-size:1.3rem;flex-shrink:0}
+    .loss-alert .la-body{font-size:.84rem;line-height:1.5;color:var(--red)}
+    .loss-alert .la-title{font-weight:600;margin-bottom:2px}
+
+    /* ── Monthly Target ── */
+    .mtarget-bar-wrap{margin-bottom:18px;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:14px 18px}
+    .mtarget-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .mtarget-label{font-size:.78rem;color:var(--tx2);white-space:nowrap}
+    .mtarget-inp{background:var(--bg3);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:5px 9px;font-family:inherit;font-size:.83rem;width:120px}
+    .mtarget-inp:focus{outline:none;border-color:var(--ac)}
+    .mtarget-track{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;flex:1;min-width:100px}
+    .mtarget-fill{height:100%;border-radius:4px;transition:width .4s ease}
+    .mtarget-pct{font-size:.80rem;font-weight:600;white-space:nowrap}
   </style>
 </head>
 <body>
@@ -398,6 +419,8 @@
     <!-- Dashboard -->
     <section id="view-dashboard" class="view active">
       <div class="page-header"><div class="page-title">대시보드<span>Overview</span></div></div>
+      <div id="dash-alert"></div>
+      <div class="mtarget-bar-wrap" id="mtarget-wrap" style="display:none"></div>
       <div class="stat-grid" id="dash-stats"></div>
       <div id="dash-jnl-stats"></div>
       <div class="chart-row">
@@ -419,7 +442,7 @@
       <div class="table-card">
         <div class="table-card-hdr"><h3>월별 성과 요약</h3></div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>월</th><th>매매</th><th>승</th><th>패</th><th>승률</th><th>월 손익 합계</th><th>평균 손익</th></tr></thead>
+          <thead><tr><th>월</th><th class="tt" data-tip="해당 월의 총 매매 횟수 (승+패)">매매</th><th class="tt" data-tip="수익이 난 매매 수">승</th><th class="tt" data-tip="손실이 난 매매 수">패</th><th class="tt" data-tip="승률 = 승 ÷ (승+패) × 100%">승률</th><th class="tt" data-tip="월 손익 합계 = 해당 월 모든 매매 손익% 합산">월 손익 합계</th><th class="tt" data-tip="평균 손익 = 월 손익 합계 ÷ 총 매매 수">평균 손익</th></tr></thead>
           <tbody id="monthly-tbody"></tbody>
         </table></div>
       </div>
@@ -741,7 +764,26 @@
   <button class="btn btn-secondary btn-sm" onclick="document.getElementById('undo-bar').style.display='none'">✕</button>
 </div>
 
+<div id="ftip"></div>
 <script>
+/* ── Formula Tooltip System ── */
+(function(){
+  const tip=document.getElementById('ftip');
+  let _tid=null;
+  document.addEventListener('mouseover',e=>{
+    const el=e.target.closest('[data-tip]');
+    if(el){clearTimeout(_tid);tip.textContent=el.dataset.tip;tip.style.opacity='1';}
+    else{_tid=setTimeout(()=>tip.style.opacity='0',80);}
+  });
+  document.addEventListener('mousemove',e=>{
+    if(tip.style.opacity>'0'){
+      const x=Math.min(e.clientX+14,window.innerWidth-tip.offsetWidth-10);
+      const y=e.clientY-tip.offsetHeight-10<0?e.clientY+16:e.clientY-tip.offsetHeight-10;
+      tip.style.left=x+'px';tip.style.top=y+'px';
+    }
+  });
+})();
+
 /* ── Firebase ── */
 const FB={apiKey:"AIzaSyDEPq3SqOCiltpmesT3vP9Jp7a_ujFou1k",authDomain:"daily-task-planner-9187f.firebaseapp.com",projectId:"daily-task-planner-9187f",storageBucket:"daily-task-planner-9187f.firebasestorage.app",messagingSenderId:"309757618979",appId:"1:309757618979:web:79fbdc11fbfbcdffa9ba96"};
 const AUTH_SFX="@hilliard.buffshire.internal";
@@ -910,20 +952,58 @@ function renderDashboard(){
   const mddDate=journal.length?smddDate:tradeMddDate;
   const mddPeakDate=journal.length?spDate:'';
   const latestJnl=jnlSorted[jnlSorted.length-1];
-  const curSeed=latestJnl?.totalSeed||0;
+  const curSeed=+latestJnl?.totalSeed||0;
   const curM=new Date().toISOString().slice(0,7);
   const mthProfit=journal.filter(e=>e.date?.startsWith(curM)).reduce((a,e)=>a+(+e.profit||0),0);
 
+  // ── Current losing streak check (for alert banner) ──
+  let curLossStreak=0;
+  for(let i=jnlSorted.length-1;i>=0;i--){
+    const p=+jnlSorted[i].profit||0;if(!p)continue;
+    if(p<0)curLossStreak++;else break;
+  }
+
+  // ── Alert Banner ──
+  const alertEl=document.getElementById('dash-alert');
+  if(alertEl){
+    if(curLossStreak>=3){
+      const lastLossDate=jnlSorted.filter(e=>+e.profit<0).slice(-1)[0]?.date||'';
+      alertEl.innerHTML=`<div class="loss-alert"><div class="la-icon">🔴</div><div class="la-body"><div class="la-title">연속 손실 ${curLossStreak}일 경고</div>마지막 손실: ${lastLossDate} &nbsp;|&nbsp; 포지션 크기 축소 및 전략 재검토를 권장합니다.</div></div>`;
+    } else {
+      alertEl.innerHTML='';
+    }
+  }
+
+  // ── Monthly Target Widget ──
+  const mtWrap=document.getElementById('mtarget-wrap');
+  if(mtWrap){
+    const uid=getCurUid();
+    const _tKey='hb_mtarget_'+uid+'_'+curM;
+    const _saved=+localStorage.getItem(_tKey)||0;
+    const pct=_saved>0?Math.min(Math.round(mthProfit/_saved*100),999):0;
+    const fillColor=mthProfit>=_saved?'var(--green)':mthProfit>=0?'var(--ac)':'var(--red)';
+    mtWrap.style.display='block';
+    mtWrap.innerHTML=`
+      <div class="mtarget-row">
+        <span class="mtarget-label">이번달 목표 수익금 ($)</span>
+        <input class="mtarget-inp" type="number" id="mtarget-inp" value="${_saved||''}" placeholder="목표 금액 입력" oninput="(function(v){localStorage.setItem('${_tKey}',v||0);renderDashboard();})(this.value)">
+        <span style="font-size:.78rem;color:var(--tx2)">달성: <b class="${mthProfit>=0?'pos':'neg'}">${mthProfit>=0?'+':'-'}$${fmtN(Math.abs(mthProfit))}</b></span>
+        ${_saved>0?`<span class="mtarget-pct" style="color:${fillColor}">${pct}%</span>`:''}
+      </div>
+      ${_saved>0?`<div style="display:flex;align-items:center;gap:8px"><div class="mtarget-track"><div class="mtarget-fill" style="width:${Math.max(0,Math.min(pct,100))}%;background:${fillColor}"></div></div><span style="font-size:.72rem;color:var(--tx2)">$0 → $${fmtN(_saved)}</span></div>`:''}`;
+  }
+
+  // ── Stat cards with formula tooltips ──
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat-card c-ac"><div class="stat-label">총 매매</div><div class="stat-value">${n}회</div><div class="stat-sub">${wins.length}승 ${losses.length}패</div></div>
-    <div class="stat-card ${n&&wins.length/n>=.5?'c-green':'c-red'}"><div class="stat-label">승률</div><div class="stat-value">${wr}%</div></div>
-    <div class="stat-card ${cum>=0?'c-green':'c-red'}"><div class="stat-label">누적 수익률</div><div class="stat-value">${cum}%</div></div>
-    <div class="stat-card"><div class="stat-label">평균 손익%</div><div class="stat-value ${+avgP>=0?'pos':'neg'}">${avgP}%</div></div>
-    <div class="stat-card c-red"><div class="stat-label">최대 낙폭 MDD</div><div class="stat-value">-${mdd.toFixed(2)}%</div>${mddPeakDate?`<div class="stat-sub" style="line-height:1.7">▲ 고점 ${mddPeakDate}<br>▼ 저점 ${mddDate}</div>`:mddDate?`<div class="stat-sub">${mddDate}</div>`:''}</div>
-    <div class="stat-card c-green"><div class="stat-label">평균 수익 (승)</div><div class="stat-value pos">+${avgWin}%</div></div>
-    <div class="stat-card c-red"><div class="stat-label">평균 손실 (패)</div><div class="stat-value neg">${avgLoss}%</div><div class="stat-sub">P.Factor ${pf}</div></div>
+    <div class="stat-card ${n&&wins.length/n>=.5?'c-green':'c-red'}"><div class="stat-label tt" data-tip="승률 = 승리 매매 수 ÷ 전체 매매 수 × 100\n= ${wins.length} ÷ ${n} × 100">승률</div><div class="stat-value">${wr}%</div></div>
+    <div class="stat-card ${cum>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="누적 수익률 = 각 매매 손익%의 누적 합계\n매매 기록 테이블의 마지막 행 값">누적 수익률</div><div class="stat-value">${cum}%</div></div>
+    <div class="stat-card"><div class="stat-label tt" data-tip="평균 손익% = 전체 손익% 합계 ÷ 매매 수\n= ${trades.reduce((a,t)=>a+(+t.pnl||0),0).toFixed(2)} ÷ ${n}">평균 손익%</div><div class="stat-value ${+avgP>=0?'pos':'neg'}">${avgP}%</div></div>
+    <div class="stat-card c-red"><div class="stat-label tt" data-tip="${journal.length?'시드 기반 MDD = (고점 시드 - 저점 시드) ÷ 고점 시드 × 100\n고점: $'+fmtN(sp)+' ('+spDate+')\n저점: $'+fmtN(+(sp*(1-smdd/100)).toFixed(0))+' ('+smddDate+')':'복리 자산 MDD = 각 매매 후 자산 추적, (고점-저점)/고점 × 100'}">최대 낙폭 MDD</div><div class="stat-value">-${mdd.toFixed(2)}%</div>${mddPeakDate?`<div class="stat-sub" style="line-height:1.7">▲ 고점 ${mddPeakDate}<br>▼ 저점 ${mddDate}</div>`:mddDate?`<div class="stat-sub">${mddDate}</div>`:''}</div>
+    <div class="stat-card c-green"><div class="stat-label tt" data-tip="평균 수익 = 승리 매매 손익% 합계 ÷ 승리 수\n= ${grossW.toFixed(2)} ÷ ${wins.length}">평균 수익 (승)</div><div class="stat-value pos">+${avgWin}%</div></div>
+    <div class="stat-card c-red"><div class="stat-label tt" data-tip="평균 손실 = 패배 매매 손익% 합계 ÷ 패배 수\nP.Factor = 총수익 ÷ 총손실 = ${grossW.toFixed(2)} ÷ ${grossL.toFixed(2)}">평균 손실 (패)</div><div class="stat-value neg">${avgLoss}%</div><div class="stat-sub">P.Factor ${pf}</div></div>
     ${curSeed?`<div class="stat-card c-ac"><div class="stat-label">현재 시드</div><div class="stat-value">$${fmtN(curSeed)}</div><div class="stat-sub">${latestJnl.date}</div></div>`:''}
-    ${journal.length?`<div class="stat-card ${mthProfit>=0?'c-green':'c-red'}"><div class="stat-label">이번달 수익금</div><div class="stat-value ${mthProfit>=0?'pos':'neg'}">${mthProfit>=0?'+':'-'}$${fmtN(Math.abs(mthProfit))}</div><div class="stat-sub">${curM}</div></div>`:''}
+    ${journal.length?`<div class="stat-card ${mthProfit>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="이번달 수익금 = ${curM} 매매일지 profit 합계\n= 수익금 컬럼 (총시드 + 출입금 - 시드시작) 합산">이번달 수익금</div><div class="stat-value ${mthProfit>=0?'pos':'neg'}">${mthProfit>=0?'+':'-'}$${fmtN(Math.abs(mthProfit))}</div><div class="stat-sub">${curM}</div></div>`:''}
     `;
 
   // ── Journal stats section ──
@@ -936,7 +1016,6 @@ function renderDashboard(){
       const jWr=active.length?(jWin/active.length*100).toFixed(1):0;
       const cumP=active.reduce((a,e)=>a+(+e.profit||0),0);
       const avgDP=active.length?(cumP/active.length).toFixed(2):0;
-      // smdd/smddDate already computed above (seed-based MDD)
       // Win / loss streaks with date ranges
       let streak=0,maxW=0,maxL=0,sType=null,curSt='',curEn='';
       let wStart='',wEnd='',lStart='',lEnd='';
@@ -947,7 +1026,6 @@ function renderDashboard(){
         if(t==='w'&&streak>maxW){maxW=streak;wStart=curSt;wEnd=curEn;}
         if(t==='l'&&streak>maxL){maxL=streak;lStart=curSt;lEnd=curEn;}
       });
-      // Best month
       const jGrossW=active.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit||0),0);
       const jGrossL=Math.abs(active.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit||0),0));
       const jPF=jGrossL?(jGrossW/jGrossL).toFixed(2):jGrossW?'∞':'—';
@@ -955,19 +1033,29 @@ function renderDashboard(){
       const jAvgL=jLoss?(jGrossL/jLoss).toFixed(2):0;
       // Expected value per trade = WR × avgWin - (1-WR) × avgLoss
       const jEV=+(+jWr/100*+jAvgW-(1-+jWr/100)*+jAvgL).toFixed(2);
+      // Kelly Criterion: f* = WR - (1-WR)/RR  where RR = avgWin/avgLoss
+      const jRR=+jAvgL>0?(+jAvgW/+jAvgL):0;
+      const jKelly=jRR>0?(+jWr/100-(1-+jWr/100)/jRR):0;
+      const jHalfKelly=jKelly/2;
+      const kellyDollar=curSeed>0&&jHalfKelly>0?+(jHalfKelly*curSeed).toFixed(0):0;
+      // Drawdown recovery
+      const curDD=curSeed>0&&sp>curSeed?sp-curSeed:0;
+      const ddDaysToRecover=jEV>0&&curDD>0?Math.ceil(curDD/jEV):0;
       const uName=getCurUser()?.name||'일지';
       jnlEl.innerHTML=`
         <div class="section-label" style="margin-top:20px;margin-bottom:10px">📋 ${uName} 매매일지 통계</div>
         <div class="stat-grid">
           <div class="stat-card c-ac"><div class="stat-label">총 거래일</div><div class="stat-value">${active.length}일</div><div class="stat-sub">${jWin}수익 ${jLoss}손실</div></div>
-          <div class="stat-card ${+jWr>=50?'c-green':'c-red'}"><div class="stat-label">일간 승률</div><div class="stat-value">${jWr}%</div></div>
-          <div class="stat-card ${cumP>=0?'c-green':'c-red'}"><div class="stat-label">누적 수익금</div><div class="stat-value ${cumP>=0?'pos':'neg'}">${cumP>=0?'+':'-'}$${fmtN(Math.abs(cumP))}</div></div>
-          <div class="stat-card"><div class="stat-label">일평균 손익</div><div class="stat-value ${+avgDP>=0?'pos':'neg'}">${+avgDP>=0?'+':'-'}$${Math.abs(avgDP)}</div></div>
-          <div class="stat-card ${jEV>=0?'c-green':'c-red'}"><div class="stat-label">거래당 기대값 EV</div><div class="stat-value ${jEV>=0?'pos':'neg'}">${jEV>=0?'+':'-'}$${fmtN(Math.abs(jEV))}</div><div class="stat-sub">WR×평균수익 − 패률×평균손실</div></div>
+          <div class="stat-card ${+jWr>=50?'c-green':'c-red'}"><div class="stat-label tt" data-tip="일간 승률 = 수익일 ÷ 전체 거래일 × 100\n= ${jWin} ÷ ${active.length} × 100">일간 승률</div><div class="stat-value">${jWr}%</div></div>
+          <div class="stat-card ${cumP>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="누적 수익금 = 매매일지 profit 컬럼 전체 합계\n= 총시드 변동폭 누적">누적 수익금</div><div class="stat-value ${cumP>=0?'pos':'neg'}">${cumP>=0?'+':'-'}$${fmtN(Math.abs(cumP))}</div></div>
+          <div class="stat-card"><div class="stat-label tt" data-tip="일평균 손익 = 누적 수익금 ÷ 전체 거래일\n= $${fmtN(Math.abs(cumP))} ÷ ${active.length}">일평균 손익</div><div class="stat-value ${+avgDP>=0?'pos':'neg'}">${+avgDP>=0?'+':'-'}$${Math.abs(avgDP)}</div></div>
+          <div class="stat-card ${jEV>=0?'c-green':'c-red'}"><div class="stat-label tt" data-tip="기대값(EV) = 승률 × 평균수익 - 패률 × 평균손실\n= ${jWr}% × $${fmtN(jAvgW)} - ${(100-+jWr).toFixed(1)}% × $${fmtN(jAvgL)}">거래당 기대값 EV</div><div class="stat-value ${jEV>=0?'pos':'neg'}">${jEV>=0?'+':'-'}$${fmtN(Math.abs(jEV))}</div><div class="stat-sub">WR×평균수익 − 패률×평균손실</div></div>
           <div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">${maxW}일</div>${wStart?`<div class="stat-sub">${wStart}~${wEnd.slice(5)}</div>`:''}</div>
           <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div>${lStart?`<div class="stat-sub">${lStart}~${lEnd.slice(5)}</div>`:''}</div>
-          <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
-          <div class="stat-card"><div class="stat-label">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$${fmtN(jAvgW)}</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$${fmtN(jAvgL)}</span></div><div class="stat-sub">수익${jWin}일 · 손실${jLoss}일</div></div>
+          <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label tt" data-tip="P-Factor = 총수익금 ÷ 총손실금\n= $${fmtN(jGrossW)} ÷ $${fmtN(jGrossL)}\n>1이면 수익, <1이면 손실 구조">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
+          <div class="stat-card"><div class="stat-label tt" data-tip="평균 수익일 = 수익일 합계 ÷ 수익일 수 ($${fmtN(jGrossW)} ÷ ${jWin})\n평균 손실일 = 손실일 합계 ÷ 손실일 수 ($${fmtN(jGrossL)} ÷ ${jLoss})">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$${fmtN(jAvgW)}</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$${fmtN(jAvgL)}</span></div><div class="stat-sub">수익${jWin}일 · 손실${jLoss}일</div></div>
+          ${jKelly>0?`<div class="stat-card ${jHalfKelly>=0.05?'c-green':''}"><div class="stat-label tt" data-tip="켈리 기준 = WR - (1-WR) ÷ RR\nRR(손익비) = 평균수익($${fmtN(jAvgW)}) ÷ 평균손실($${fmtN(jAvgL)}) = ${jRR.toFixed(2)}\n풀 켈리: ${(jKelly*100).toFixed(1)}% → 반 켈리(권장): ${(jHalfKelly*100).toFixed(1)}%">켈리 포지션 크기</div><div class="stat-value">${(jHalfKelly*100).toFixed(1)}%<span style="font-size:.65rem;color:var(--tx2);font-weight:400"> 반켈리</span></div><div class="stat-sub">${kellyDollar?`권장 베팅 $${fmtN(kellyDollar)} (풀켈리 ${(jKelly*100).toFixed(1)}%)`:''}</div></div>`:''}
+          ${curDD>0?`<div class="stat-card c-red"><div class="stat-label tt" data-tip="드로다운 = 고점 시드($${fmtN(sp)}) - 현재 시드($${fmtN(curSeed)})\n회복 예상일 = 낙폭($${fmtN(curDD)}) ÷ 일일 EV($${fmtN(jEV)})\n${ddDaysToRecover>0?'약 '+ddDaysToRecover+'일 후 회복 예상':'EV 음수 → 회복 불투명'}">드로다운 회복 예측</div><div class="stat-value neg">-$${fmtN(curDD)}</div><div class="stat-sub">${ddDaysToRecover>0?`EV 기준 약 ${ddDaysToRecover}일 후 회복`:'EV 개선 필요'}</div></div>`:''}
         </div>
         <div class="section-label" style="margin-top:18px;margin-bottom:8px">📅 요일별 수익 패턴</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -983,7 +1071,7 @@ function renderDashboard(){
               const wr2=Math.round(ds[d].win/ds[d].n*100);
               const avg2=+(ds[d].pnl/ds[d].n).toFixed(1);
               const cls=wr2>=50?'pos':'neg';
-              return`<div style="background:var(--bg3);border-radius:8px;padding:12px 10px;text-align:center;min-width:58px;flex:1">
+              return`<div style="background:var(--bg3);border-radius:8px;padding:12px 10px;text-align:center;min-width:58px;flex:1" class="tt" data-tip="${d}요일: ${ds[d].n}일 거래\n승률 = ${ds[d].win}승 ÷ ${ds[d].n}일 = ${wr2}%\n평균 손익 = $${fmtN(ds[d].pnl)} ÷ ${ds[d].n} = $${fmtN(avg2)}">
                 <div style="font-size:.80rem;color:var(--tx2);margin-bottom:4px;font-weight:500">${d}</div>
                 <div style="font-size:1.15rem;font-weight:700;line-height:1.1" class="${cls}">${wr2}%</div>
                 <div style="font-size:.74rem;color:var(--tx2);margin-top:4px">${ds[d].n}일</div>
@@ -997,17 +1085,19 @@ function renderDashboard(){
           ${(()=>{
             const insights=[];
             const wr2=+jWr,pf=isNaN(+jPF)?null:+jPF,avgW2=+jAvgW,avgL2=+jAvgL;
-            if(wr2<40)insights.push({c:'var(--neg)',t:`📉 일간 승률 ${wr2}%로 매우 낮습니다. 수익일(${jWin}일)보다 손실일(${jLoss}일)이 ${jLoss-jWin}일 더 많습니다. 진입 타이밍과 포지션 관리 전략 검토가 필요합니다.`});
+            if(wr2<40)insights.push({c:'var(--red)',t:`📉 일간 승률 ${wr2}%로 매우 낮습니다. 수익일(${jWin}일)보다 손실일(${jLoss}일)이 ${jLoss-jWin}일 더 많습니다. 진입 타이밍과 포지션 관리 전략 검토가 필요합니다.`});
             else if(wr2<50)insights.push({c:'rgba(255,180,0,.8)',t:`⚠️ 승률 ${wr2}%로 50% 미만입니다. 수익일 평균이 $${fmtN(avgW2)}로 손실일 평균($${fmtN(avgL2)})보다 ${avgW2>=avgL2?'크지만':'작고'} 손실일 수가 더 많아 전체 손실 중입니다.`});
-            else insights.push({c:'var(--pos)',t:`✅ 승률 ${wr2}%로 양호합니다.`});
+            else insights.push({c:'var(--green)',t:`✅ 승률 ${wr2}%로 양호합니다.`});
             if(pf!==null&&pf<1){
               const needWr=Math.ceil(avgL2/(avgL2+avgW2)*100);
-              insights.push({c:'var(--neg)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현재 수익/손실 평균 비율을 유지하려면 승률이 최소 ${needWr}% 이상이어야 손익분기점에 도달합니다 (현재 ${wr2}%).`});
-            }else if(pf!==null)insights.push({c:'var(--pos)',t:`💰 손익비 ${jPF}로 수익/손실 비율이 양호합니다.`});
-            if(maxL>=5)insights.push({c:'var(--neg)',t:`🔴 최장 연속 손실 ${maxL}일은 위험 신호입니다. 연속 손실 3일 이후 포지션 크기 축소 규칙 도입을 권장합니다.`});
-            if(maxW>=3)insights.push({c:'var(--pos)',t:`🟢 최장 연승 ${maxW}일은 상승 모멘텀이 있음을 시사합니다. 연승 기간에는 리스크를 적절히 활용하되 과도한 레버리지는 주의하세요.`});
+              insights.push({c:'var(--red)',t:`📊 손익비(P-Factor) ${jPF} < 1입니다. 현재 수익/손실 평균 비율을 유지하려면 승률이 최소 ${needWr}% 이상이어야 손익분기점에 도달합니다 (현재 ${wr2}%).`});
+            }else if(pf!==null)insights.push({c:'var(--green)',t:`💰 손익비 ${jPF}로 수익/손실 비율이 양호합니다.`});
+            if(curLossStreak>=3)insights.push({c:'var(--red)',t:`🔴 현재 연속 손실 ${curLossStreak}일 진행 중입니다. 포지션 크기를 즉시 축소하고 전략을 재검토하세요.`});
+            if(maxL>=5)insights.push({c:'var(--red)',t:`🔴 최장 연속 손실 ${maxL}일은 위험 신호입니다. 연속 손실 3일 이후 포지션 크기 축소 규칙 도입을 권장합니다.`});
+            if(maxW>=3)insights.push({c:'var(--green)',t:`🟢 최장 연승 ${maxW}일은 상승 모멘텀이 있음을 시사합니다. 연승 기간에는 리스크를 적절히 활용하되 과도한 레버리지는 주의하세요.`});
             const breakEvenWr=avgW2&&avgL2?Math.ceil(avgL2/(avgL2+avgW2)*100):null;
             if(breakEvenWr&&wr2<breakEvenWr)insights.push({c:'rgba(255,180,0,.8)',t:`📐 현재 R:R 기준 손익분기 승률: ${breakEvenWr}% (현재 ${wr2}%). ${breakEvenWr-wr2}%p 개선 필요합니다.`});
+            if(jKelly>0)insights.push({c:jHalfKelly>=0.02?'var(--green)':'rgba(255,180,0,.8)',t:`📐 켈리 기준: 반 켈리 ${(jHalfKelly*100).toFixed(1)}%를 권장 포지션 크기로 사용하세요 (풀켈리 ${(jKelly*100).toFixed(1)}%의 절반). R:R=${jRR.toFixed(2)}`});
             return insights.map(i=>`<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid ${i.c};font-size:.84rem;line-height:1.6">${i.t}</div>`).join('');
           })()}
         </div>`;
@@ -1028,13 +1118,33 @@ function renderDashboard(){
   const months=Object.keys(byMonth).sort().reverse();
   document.getElementById('monthly-tbody').innerHTML=months.map(m=>{
     const d=byMonth[m],total=d.w+d.l,wr2=total?(d.w/total*100).toFixed(1):0,avg=total?(d.pnl/total).toFixed(2):0;
-    return`<tr><td>${m}</td><td>${total}</td><td class="pos">${d.w}</td><td class="neg">${d.l}</td><td class="${+wr2>=50?'pos':'neg'}">${wr2}%</td><td class="${d.pnl>=0?'pos':'neg'}">${d.pnl>=0?'+':''}${d.pnl.toFixed(2)}%</td><td class="${+avg>=0?'pos':'neg'}">${avg}%</td></tr>`;
+    return`<tr>
+      <td>${m}</td>
+      <td class="tt" data-tip="총 매매 수 = 승(${d.w}) + 패(${d.l})">${total}</td>
+      <td class="pos tt" data-tip="${m} 승리 매매 수">${d.w}</td>
+      <td class="neg tt" data-tip="${m} 패배 매매 수">${d.l}</td>
+      <td class="${+wr2>=50?'pos':'neg'} tt" data-tip="승률 = 승(${d.w}) ÷ 총(${total}) × 100">${wr2}%</td>
+      <td class="${d.pnl>=0?'pos':'neg'} tt" data-tip="월 손익 합계 = ${m} 모든 매매 손익% 합산\n= ${d.pnl.toFixed(2)}%">${d.pnl>=0?'+':''}${d.pnl.toFixed(2)}%</td>
+      <td class="${+avg>=0?'pos':'neg'} tt" data-tip="평균 손익 = 월 손익 합계(${d.pnl.toFixed(2)}%) ÷ 매매 수(${total})">${avg}%</td>
+    </tr>`;
   }).join('')||`<tr><td colspan="7" class="empty">기록 없음</td></tr>`;
   mkLine('chart-cumulative',trades.map(t=>t.date),trades.map(t=>+t.cumulative||0));
   mkDonut('chart-winrate',wins.length,losses.length);
-  // Seed curve from journal
+  // Seed curve + running peak line (MDD zone visualization)
   const _seedRows=[...journal].filter(e=>+e.totalSeed>0).sort((a,b)=>a.date>b.date?1:-1);
-  mkLine('chart-seed-curve',_seedRows.map(e=>e.date),_seedRows.map(e=>+e.totalSeed||0));
+  if(_seedRows.length){
+    const _sDates=_seedRows.map(e=>e.date);
+    const _sVals=_seedRows.map(e=>+e.totalSeed||0);
+    const _sPeak=[];let _pk=0;
+    _sVals.forEach(v=>{_pk=Math.max(_pk,v);_sPeak.push(_pk);});
+    const ac=accent();
+    mkMultiLine('chart-seed-curve',_sDates,[
+      {label:'총시드 ($)',data:_sVals,borderColor:ac,backgroundColor:ac+'18',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+      {label:'최고점 시드',data:_sPeak,borderColor:'rgba(160,152,128,.55)',borderDash:[5,3],fill:false,tension:.3,pointRadius:0,borderWidth:1.5},
+    ]);
+  } else {
+    CH['chart-seed-curve']?.destroy();
+  }
 
   // ── Rolling win rate chart (20-entry window, journal-based) ──
   const _jActive=jnlSorted.filter(e=>+e.profit!==0);
@@ -1059,7 +1169,7 @@ function renderDashboard(){
 
   // ── Equity projection chart (60 days, based on last 30 active days EV) ──
   const _recent=_jActive.slice(-30);
-  const _latestSeedVal=+latestJnl?.totalSeed||0;
+  const _latestSeedVal=curSeed;
   if(_latestSeedVal>0&&_recent.length>=10){
     const rW=_recent.filter(e=>+e.profit>0).length;
     const rWR=rW/_recent.length;
@@ -1658,22 +1768,22 @@ function renderJnlMonthlySummary(){
   const grossL2=months.reduce((s,m)=>s+Math.abs(Math.min(byM[m].profit,0)),0);
   const mPF=grossL2?(grossW2/grossL2).toFixed(2):'∞';
   const strip=`<div class="jnl-msum-strip">
-    <div class="jnl-msum-card">
+    <div class="jnl-msum-card tt" data-tip="누적 수익금 = 매매일지 profit 컬럼 전체 합계\n= 총시드 변동폭 누적 (${months.length}개월 ${totalDays}거래일)">
       <div class="jnl-msum-lbl">누적 수익금</div>
       <div class="jnl-msum-val ${pCls}">${pSign}$${fmtN(Math.abs(totalProfit))}</div>
       <div class="jnl-msum-sub">${months.length}개월 · ${totalDays}거래일</div>
     </div>
-    <div class="jnl-msum-card">
+    <div class="jnl-msum-card tt" data-tip="월평균 수익금 = 누적 수익금($${fmtN(Math.abs(totalProfit))}) ÷ ${months.length}개월\n수익월 = 총수익금이 양수인 월 수">
       <div class="jnl-msum-lbl">월평균 수익금</div>
       <div class="jnl-msum-val ${avgMonthP>=0?'pos':'neg'}">${avgMonthP>=0?'+':'-'}$${fmtN(Math.abs(avgMonthP))}</div>
       <div class="jnl-msum-sub">수익월 ${posMRate}% (${posMonths}/${months.length}개월)</div>
     </div>
-    <div class="jnl-msum-card">
+    <div class="jnl-msum-card tt" data-tip="일간 승률 = 수익일 ÷ 전체 거래일 × 100\n= ${totalWins}일 ÷ ${totalDays}일 × 100">
       <div class="jnl-msum-lbl">일간 승률</div>
       <div class="jnl-msum-val ${wr>=50?'pos':'neg'}">${wr}%</div>
       <div class="jnl-msum-sub">${totalWins}승 ${totalDays-totalWins}패</div>
     </div>
-    <div class="jnl-msum-card">
+    <div class="jnl-msum-card tt" data-tip="일평균 손익 = 누적 수익금($${fmtN(Math.abs(totalProfit))}) ÷ ${totalDays}거래일\n월손익비(P-Factor) = 총수익월금 ÷ 총손실월금 = ${mPF}">
       <div class="jnl-msum-lbl">일평균 손익</div>
       <div class="jnl-msum-val ${avgDailyPnl>=0?'pos':'neg'}">${avgDailyPnl>=0?'+':'-'}$${fmtN(Math.abs(avgDailyPnl))}</div>
       <div class="jnl-msum-sub">월손익비 ${mPF}</div>
@@ -2240,14 +2350,14 @@ function renderSeasonality(){
     return`<tr>
       <td style="font-weight:500">${d.replace('요일','')}</td>
       <td>${s.n}건${warn}</td>
-      <td><div style="display:flex;align-items:center;gap:6px">
+      <td class="tt" data-tip="승률 = ${s.w}승 ÷ ${s.n}건 × 100 = ${wr}%"><div style="display:flex;align-items:center;gap:6px">
         <div style="width:50px;height:5px;background:var(--bg3);border-radius:3px"><div style="width:${Math.min(wrN,100)}%;height:100%;background:${wrColor};border-radius:3px"></div></div>
         <span class="${wrN>=50?'pos':'neg'}" style="font-size:.82rem">${wr}%</span>
       </div></td>
-      <td class="${avgN>=0?'pos':'neg'}">${avgN>=0?'+':''}${avg}%</td>
+      <td class="${avgN>=0?'pos':'neg'} tt" data-tip="평균손익 = ${s.pnl.toFixed(2)}% ÷ ${s.n}건 = ${avg}%">${avgN>=0?'+':''}${avg}%</td>
       <td class="${s.best===Infinity||s.best<=0?'neg':'pos'}">${s.best===Infinity?'—':(s.best>0?'+':'')+s.best.toFixed(2)+'%'}</td>
       <td class="${s.worst===Infinity||s.worst>=0?'pos':'neg'}">${s.worst===Infinity?'—':s.worst.toFixed(2)+'%'}</td>
-      <td class="${s.pnl>=0?'pos':'neg'}">${s.pnl>=0?'+':''}${s.pnl.toFixed(2)}%</td>
+      <td class="${s.pnl>=0?'pos':'neg'} tt" data-tip="누적기여 = ${d.replace('요일','')} 모든 거래 손익% 합산">${s.pnl>=0?'+':''}${s.pnl.toFixed(2)}%</td>
     </tr>`;
   }).join('');
 
@@ -2261,10 +2371,10 @@ function renderSeasonality(){
     return`<tr>
       <td style="font-weight:500">${MONTHS_KR[i-1]}</td>
       <td>${s.n}건${warn}</td>
-      <td class="${wrN>=50?'pos':'neg'}">${wr}%</td>
-      <td class="${avgN>=0?'pos':'neg'}">${avgN>=0?'+':''}${avg}%/일</td>
+      <td class="${wrN>=50?'pos':'neg'} tt" data-tip="승률 = ${s.w}승 ÷ ${s.n}건 × 100 = ${wr}%">${wr}%</td>
+      <td class="${avgN>=0?'pos':'neg'} tt" data-tip="평균손익/일 = ${s.pnl.toFixed(2)}% ÷ ${s.n}건 = ${avg}%">${avgN>=0?'+':''}${avg}%/일</td>
       <td>${s.w}승 ${s.l}패</td>
-      <td class="${s.pnl>=0?'pos':'neg'}">${s.pnl>=0?'+':''}${s.pnl.toFixed(2)}%</td>
+      <td class="${s.pnl>=0?'pos':'neg'} tt" data-tip="누적기여 = ${MONTHS_KR[i-1]} 모든 거래 손익% 합산">${s.pnl>=0?'+':''}${s.pnl.toFixed(2)}%</td>
     </tr>`;
   }).join('');
 
@@ -2285,7 +2395,7 @@ function renderSeasonality(){
     <div class="table-card" style="margin-top:14px">
       <div class="table-card-hdr"><h3>요일별 상세 데이터</h3></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>요일</th><th>거래수</th><th>승률</th><th>평균손익%</th><th>최고단일</th><th>최저단일</th><th>누적기여</th></tr></thead>
+        <thead><tr><th>요일</th><th class="tt" data-tip="해당 요일 총 거래 횟수">거래수</th><th class="tt" data-tip="승률 = 수익 거래 ÷ 총 거래 × 100%">승률</th><th class="tt" data-tip="평균손익 = 해당 요일 손익% 합계 ÷ 거래 수">평균손익%</th><th class="tt" data-tip="해당 요일 중 가장 높은 단일 거래 손익%">최고단일</th><th class="tt" data-tip="해당 요일 중 가장 낮은 단일 거래 손익%">최저단일</th><th class="tt" data-tip="해당 요일 모든 거래 손익% 합산 총계">누적기여</th></tr></thead>
         <tbody>${dayRows}</tbody>
       </table></div>
     </div>
@@ -2306,7 +2416,7 @@ function renderSeasonality(){
     <div class="table-card" style="margin-top:14px">
       <div class="table-card-hdr"><h3>월별 상세 데이터</h3></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>월</th><th>거래수</th><th>승률</th><th>평균손익/일</th><th>승/패</th><th>누적기여</th></tr></thead>
+        <thead><tr><th>월</th><th class="tt" data-tip="해당 캘린더 월 총 거래 횟수 (연도 구분 없이 집계)">거래수</th><th class="tt" data-tip="승률 = 수익 거래 ÷ 총 거래 × 100%">승률</th><th class="tt" data-tip="평균손익/일 = 해당 월 손익% 합계 ÷ 거래 수">평균손익/일</th><th class="tt" data-tip="수익 거래 수 / 손실 거래 수">승/패</th><th class="tt" data-tip="해당 캘린더 월 모든 거래 손익% 합산">누적기여</th></tr></thead>
         <tbody>${monthRows}</tbody>
       </table></div>
     </div>`;
