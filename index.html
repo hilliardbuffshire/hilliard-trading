@@ -237,6 +237,14 @@
     .tr-main-row{cursor:pointer}
     .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
     .tr-expand-inner{padding:14px 18px;background:var(--bg3);display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+    .bal-tbl{width:100%;border-collapse:collapse;font-size:.78rem}
+    .bal-tbl th{padding:6px 10px;text-align:right;color:var(--tx2);font-weight:500;border-bottom:1px solid var(--bd);white-space:nowrap}
+    .bal-tbl th:first-child{text-align:left}
+    .bal-tbl td{padding:5px 10px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap}
+    .bal-tbl td:first-child{text-align:left;color:var(--tx2)}
+    .bal-tbl tr.bal-win td{background:var(--green-dim)}
+    .bal-tbl tr.bal-loss td{background:var(--red-dim)}
+    .bal-tbl tr.bal-stop td:first-child::after{content:' ⚠';opacity:.6}
     .tr-expand-section{display:flex;flex-direction:column;gap:6px;flex:1;min-width:140px}
     .tr-expand-label{font-size:.68rem;color:var(--tx2);text-transform:uppercase;letter-spacing:.07em}
     .tr-expand-memo{font-size:.83rem;color:var(--tx);line-height:1.6;white-space:pre-wrap;max-width:500px}
@@ -418,6 +426,15 @@
         </div>
       </div>
       <div class="chart-card" style="margin-bottom:22px"><h3>누적 수익률 곡선</h3><canvas id="chart-trades-curve"></canvas></div>
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;cursor:pointer" onclick="toggleBalancePanel()">
+          <span style="font-size:.84rem;font-weight:500;color:var(--tx2)">📋 일일 잔고 현황 <span style="color:var(--ac);font-size:.75rem">(매매일지 기반)</span></span>
+          <span id="balance-panel-arrow" style="color:var(--tx2);font-size:.75rem">▶</span>
+        </div>
+        <div id="trades-balance-wrap" style="max-height:0;overflow:hidden;transition:max-height .25s ease">
+          <div id="trades-balance-inner" style="padding:4px 0 2px"></div>
+        </div>
+      </div>
       <div class="filter-bar">
         <input type="text" placeholder="종목 검색..." id="tr-search" oninput="renderTrades()">
         <select id="tr-filter-result" onchange="renderTrades()"><option value="">전체</option><option>승</option><option>패</option><option>진행중</option></select>
@@ -755,7 +772,7 @@ window.switchUser=async function(id){
   await Promise.all([fetchTrades(),fetchJournal()]);
   const v=document.querySelector('.view.active')?.id?.replace('view-','');
   renderDashboard();
-  if(v==='trades'){renderTrades();renderTradesCurve();}
+  if(v==='trades'){renderTrades();renderTradesCurve();renderJnlBalancePanel();}
   if(v==='journal')renderJournal();
   if(v==='seasonality')renderSeasonality();
 };
@@ -817,7 +834,7 @@ window.goTo=function(v){
   document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.id==='view-'+v));
   if(v==='dashboard')   renderDashboard();
   if(v==='journal')     {if(_jnlDirty)renderJournal();}
-  if(v==='trades')      {renderTrades();renderTradesCurve();}
+  if(v==='trades')      {renderTrades();renderTradesCurve();renderJnlBalancePanel();}
   if(v==='seasonality') renderSeasonality();
   if(v==='ai')          renderAIView();
 };
@@ -1044,7 +1061,7 @@ const JNL_COLS=[
     get:e=>e.personalCumPnl,
     upd:v=>({personalCumPnl:+v||0})},
   {key:'stopAlert',     label:'강제종료',    fmt:'stop',
-    dropdown:['','▲ WARNING','● DAY STOP','STOP+REST'],
+    dropdown:['','▲ WARNING','● DAY STOP','■ STOP+REST'],
     get:e=>e.stopAlert,
     upd:v=>({stopAlert:v})},
   {key:'memo',          label:'비고/사유',   fmt:'txt',
@@ -1757,6 +1774,61 @@ window.toggleTradeExpand=function(id){
   if(willOpen)row.style.display='table-row';
 };
 function renderTradesCurve(){mkLine('chart-trades-curve',trades.map(t=>t.date),trades.map(t=>+t.cumulative||0));}
+
+function renderJnlBalancePanel(){
+  const wrap=document.getElementById('trades-balance-wrap');if(!wrap)return;
+  if(!wrap.classList.contains('open'))return; // skip when panel is collapsed
+  const el=document.getElementById('trades-balance-inner');if(!el)return;
+  if(!journal.length){el.innerHTML='<div style="padding:12px 14px;font-size:.80rem;color:var(--tx2)">매매일지 데이터 없음</div>';return;}
+  const rows=[...journal].sort((a,b)=>b.date>a.date?1:-1).slice(0,90);
+  const html=`<div style="overflow-x:auto;padding:0 0 4px">
+    <table class="bal-tbl">
+      <thead><tr>
+        <th>날짜</th><th>총시드($)</th><th>일손익($)</th><th>수익률</th><th>테더(₩)</th><th>강제종료</th>
+      </tr></thead>
+      <tbody>${rows.map(e=>{
+        const p=+e.profit||0,r=+e.rate||0,s=+e.totalSeed||0,t=+e.tether||0;
+        const stop=e.stopAlert||'';
+        const cls=p>0?'bal-win':p<0?'bal-loss':'';
+        const stopCls=stop?'bal-stop':'';
+        const pSign=p>=0?'+':'-';
+        const stopColor=stop.includes('DAY STOP')?'var(--red)':stop.includes('WARNING')?'#e0a060':'var(--ac)';
+        return`<tr class="${cls} ${stopCls}">
+          <td>${e.date}</td>
+          <td>${s?'$'+fmtN(s):'—'}</td>
+          <td class="${p>0?'pos':p<0?'neg':''}">${p?pSign+'$'+fmtN(Math.abs(p)):'—'}</td>
+          <td class="${r>0?'pos':r<0?'neg':''}">${r?(r>=0?'+':'')+r.toFixed(2)+'%':'—'}</td>
+          <td>${t?t.toLocaleString('ko-KR'):'—'}</td>
+          <td>${stop?`<span style="color:${stopColor};font-weight:600;font-size:.72rem">${stop}</span>`:'—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+  el.innerHTML=html;
+  // If panel is open, update height
+  if(wrap.classList.contains('open')){
+    wrap.style.maxHeight=el.scrollHeight+8+'px';
+  }
+}
+
+window.toggleBalancePanel=function(){
+  const wrap=document.getElementById('trades-balance-wrap');
+  const arrow=document.getElementById('balance-panel-arrow');
+  if(!wrap)return;
+  if(wrap.classList.contains('open')){
+    wrap.style.maxHeight=wrap.scrollHeight+'px';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{wrap.style.maxHeight='0';}));
+    wrap.classList.remove('open');
+    if(arrow)arrow.textContent='▶';
+  }else{
+    renderJnlBalancePanel();
+    const h=document.getElementById('trades-balance-inner').scrollHeight+8;
+    wrap.classList.add('open');
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{wrap.style.maxHeight=h+'px';}));
+    wrap.addEventListener('transitionend',()=>{if(wrap.classList.contains('open'))wrap.style.maxHeight='none';},{once:true});
+    if(arrow)arrow.textContent='▼';
+  }
+};
 window.editTrade=function(id){const t=trades.find(x=>x.id===id);if(t)openTradeModal(t);};
 window.openTradeModal=function(trade=null){
   editTradeId=trade?trade.id:null;
@@ -1880,7 +1952,7 @@ window.saveTrade=async function(){
       await db.collection('trading_trades').add(data);
       await fetchTrades();
     }
-    renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();
+    renderTrades();renderTradesCurve();renderJnlBalancePanel();renderDashboard();renderSeasonality();
     closeModal('modal-trade');toast(editTradeId?'수정됨':'저장됨','ok');editTradeId=null;
   }catch(e){console.error(e);toast('저장 실패: '+(e.message||'오류'),'err');}
   finally{setSaving('tr-save-btn',false);}
@@ -2365,11 +2437,11 @@ window.del=async function(col,id){
     const prev=[...trades];
     trades=trades.filter(t=>t.id!==id);
     localRecalcCum();
-    renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();
+    renderTrades();renderTradesCurve();renderJnlBalancePanel();renderDashboard();renderSeasonality();
     try{
       await db.collection(col).doc(id).delete();
       await recalcCumulatives();
-      renderTrades();renderTradesCurve();renderDashboard();
+      renderTrades();renderTradesCurve();renderJnlBalancePanel();renderDashboard();
     }catch(e){trades=prev;localRecalcCum();renderTrades();renderDashboard();toast('삭제 실패','err');return;}
   }else{
     const prev=[...journal];
@@ -2499,7 +2571,7 @@ window.confirmImport=async function(){
       const ref=await db.collection(col).add(item);ids.push(ref.id);
     }
     importUndo={col,ids};
-    if(importMode==='trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();}
+    if(importMode==='trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderJnlBalancePanel();renderDashboard();renderSeasonality();}
     else{await fetchJournal();renderJournal();}
     closeModal('modal-import');
     toast(`${ids.length}건 가져오기 완료`,'ok');
@@ -2515,7 +2587,7 @@ window.undoImport=async function(){
   try{
     for(const id of ids)await db.collection(col).doc(id).delete();
     importUndo=null;document.getElementById('undo-bar').style.display='none';
-    if(col==='trading_trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderDashboard();renderSeasonality();}
+    if(col==='trading_trades'){await fetchTrades();await recalcCumulatives();renderTrades();renderTradesCurve();renderJnlBalancePanel();renderDashboard();renderSeasonality();}
     else{await fetchJournal();renderJournal();}
     toast('가져오기 취소됨','ok');
   }catch(e){toast('되돌리기 실패','err');}
