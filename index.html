@@ -404,7 +404,11 @@
         <div class="chart-card"><h3>누적 수익률 추이</h3><canvas id="chart-cumulative"></canvas></div>
         <div class="chart-card"><h3>승률</h3><canvas id="chart-winrate"></canvas></div>
       </div>
-      <div class="chart-card" style="margin-bottom:22px"><h3>📈 시드 변화 추이 (총시드 $)</h3><canvas id="chart-seed-curve"></canvas></div>
+      <div class="chart-card" style="margin-bottom:16px"><h3>📈 시드 변화 추이 (총시드 $)</h3><canvas id="chart-seed-curve"></canvas></div>
+      <div class="chart-row" style="margin-bottom:22px">
+        <div class="chart-card"><h3>📊 롤링 승률 추세 <span style="font-size:.72rem;color:var(--tx2)">(20일 이동평균)</span></h3><canvas id="chart-rolling-wr"></canvas></div>
+        <div class="chart-card"><h3>🔮 미래 시드 추정 <span style="font-size:.72rem;color:var(--tx2)">(60일, 최근 30일 EV 기반)</span></h3><canvas id="chart-equity-proj"></canvas></div>
+      </div>
       <div class="table-card">
         <div class="table-card-hdr"><h3>최근 매매기록</h3><button class="btn btn-secondary btn-sm" onclick="goTo('trades')">전체보기</button></div>
         <div class="tbl-wrap"><table>
@@ -900,10 +904,11 @@ function renderDashboard(){
   // Journal stats (computed early so available for top stats)
   const jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
   // Seed-based MDD from journal (accurate: (peak_seed - current_seed) / peak_seed)
-  let sp=0,smdd=0,smddDate='';
-  jnlSorted.forEach(e=>{const s=+e.totalSeed||0;if(!s)return;if(s>sp)sp=s;if(sp>0){const dd=(sp-s)/sp*100;if(dd>smdd){smdd=dd;smddDate=e.date;}}});
+  let sp=0,spDate='',smdd=0,smddDate='';
+  jnlSorted.forEach(e=>{const s=+e.totalSeed||0;if(!s)return;if(s>sp){sp=s;spDate=e.date;}if(sp>0){const dd=(sp-s)/sp*100;if(dd>smdd){smdd=dd;smddDate=e.date;}}});
   const mdd=journal.length?smdd:tradeMdd;
   const mddDate=journal.length?smddDate:tradeMddDate;
+  const mddPeakDate=journal.length?spDate:'';
   const latestJnl=jnlSorted[jnlSorted.length-1];
   const curSeed=latestJnl?.totalSeed||0;
   const curM=new Date().toISOString().slice(0,7);
@@ -914,7 +919,7 @@ function renderDashboard(){
     <div class="stat-card ${n&&wins.length/n>=.5?'c-green':'c-red'}"><div class="stat-label">승률</div><div class="stat-value">${wr}%</div></div>
     <div class="stat-card ${cum>=0?'c-green':'c-red'}"><div class="stat-label">누적 수익률</div><div class="stat-value">${cum}%</div></div>
     <div class="stat-card"><div class="stat-label">평균 손익%</div><div class="stat-value ${+avgP>=0?'pos':'neg'}">${avgP}%</div></div>
-    <div class="stat-card c-red"><div class="stat-label">최대 낙폭 MDD</div><div class="stat-value">-${mdd.toFixed(2)}%</div>${mddDate?`<div class="stat-sub">${mddDate}</div>`:''}</div>
+    <div class="stat-card c-red"><div class="stat-label">최대 낙폭 MDD</div><div class="stat-value">-${mdd.toFixed(2)}%</div>${mddPeakDate?`<div class="stat-sub" style="line-height:1.7">▲ 고점 ${mddPeakDate}<br>▼ 저점 ${mddDate}</div>`:mddDate?`<div class="stat-sub">${mddDate}</div>`:''}</div>
     <div class="stat-card c-green"><div class="stat-label">평균 수익 (승)</div><div class="stat-value pos">+${avgWin}%</div></div>
     <div class="stat-card c-red"><div class="stat-label">평균 손실 (패)</div><div class="stat-value neg">${avgLoss}%</div><div class="stat-sub">P.Factor ${pf}</div></div>
     ${curSeed?`<div class="stat-card c-ac"><div class="stat-label">현재 시드</div><div class="stat-value">$${fmtN(curSeed)}</div><div class="stat-sub">${latestJnl.date}</div></div>`:''}
@@ -948,6 +953,8 @@ function renderDashboard(){
       const jPF=jGrossL?(jGrossW/jGrossL).toFixed(2):jGrossW?'∞':'—';
       const jAvgW=jWin?(jGrossW/jWin).toFixed(2):0;
       const jAvgL=jLoss?(jGrossL/jLoss).toFixed(2):0;
+      // Expected value per trade = WR × avgWin - (1-WR) × avgLoss
+      const jEV=+(+jWr/100*+jAvgW-(1-+jWr/100)*+jAvgL).toFixed(2);
       const uName=getCurUser()?.name||'일지';
       jnlEl.innerHTML=`
         <div class="section-label" style="margin-top:20px;margin-bottom:10px">📋 ${uName} 매매일지 통계</div>
@@ -956,7 +963,7 @@ function renderDashboard(){
           <div class="stat-card ${+jWr>=50?'c-green':'c-red'}"><div class="stat-label">일간 승률</div><div class="stat-value">${jWr}%</div></div>
           <div class="stat-card ${cumP>=0?'c-green':'c-red'}"><div class="stat-label">누적 수익금</div><div class="stat-value ${cumP>=0?'pos':'neg'}">${cumP>=0?'+':'-'}$${fmtN(Math.abs(cumP))}</div></div>
           <div class="stat-card"><div class="stat-label">일평균 손익</div><div class="stat-value ${+avgDP>=0?'pos':'neg'}">${+avgDP>=0?'+':'-'}$${Math.abs(avgDP)}</div></div>
-          <div class="stat-card c-red"><div class="stat-label">시드 MDD</div><div class="stat-value">-${smdd.toFixed(2)}%</div>${smddDate?`<div class="stat-sub">${smddDate}</div>`:''}</div>
+          <div class="stat-card ${jEV>=0?'c-green':'c-red'}"><div class="stat-label">거래당 기대값 EV</div><div class="stat-value ${jEV>=0?'pos':'neg'}">${jEV>=0?'+':'-'}$${fmtN(Math.abs(jEV))}</div><div class="stat-sub">WR×평균수익 − 패률×평균손실</div></div>
           <div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">${maxW}일</div>${wStart?`<div class="stat-sub">${wStart}~${wEnd.slice(5)}</div>`:''}</div>
           <div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">${maxL}일</div>${lStart?`<div class="stat-sub">${lStart}~${lEnd.slice(5)}</div>`:''}</div>
           <div class="stat-card ${+jPF>=1||jPF==='∞'?'c-green':'c-red'}"><div class="stat-label">손익비 (P-Factor)</div><div class="stat-value">${jPF}</div><div class="stat-sub">총수익 $${fmtN(jGrossW)} / 총손실 $${fmtN(jGrossL)}</div></div>
@@ -1028,6 +1035,60 @@ function renderDashboard(){
   // Seed curve from journal
   const _seedRows=[...journal].filter(e=>+e.totalSeed>0).sort((a,b)=>a.date>b.date?1:-1);
   mkLine('chart-seed-curve',_seedRows.map(e=>e.date),_seedRows.map(e=>+e.totalSeed||0));
+
+  // ── Rolling win rate chart (20-entry window, journal-based) ──
+  const _jActive=jnlSorted.filter(e=>+e.profit!==0);
+  const ROLL=20;
+  if(_jActive.length>=ROLL){
+    const rollDates=[],rollWR=[];
+    for(let i=ROLL-1;i<_jActive.length;i++){
+      const win=_jActive.slice(i-ROLL+1,i+1).filter(e=>+e.profit>0).length;
+      rollDates.push(_jActive[i].date);
+      rollWR.push(+(win/ROLL*100).toFixed(1));
+    }
+    const ac=accent();
+    mkMultiLine('chart-rolling-wr',rollDates,[
+      {label:`롤링 ${ROLL}일 승률(%)`,data:rollWR,borderColor:ac,backgroundColor:ac+'20',fill:true,tension:.35,pointRadius:0,borderWidth:2},
+      {label:'50% 기준선',data:Array(rollDates.length).fill(50),borderColor:'rgba(160,152,128,.5)',borderDash:[5,4],fill:false,pointRadius:0,borderWidth:1.5,tension:0},
+    ]);
+  } else {
+    CH['chart-rolling-wr']?.destroy();
+    const ctx=document.getElementById('chart-rolling-wr')?.getContext('2d');
+    if(ctx){ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);ctx.fillStyle=txDim();ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('데이터 20건 이상 필요',ctx.canvas.width/2,50);}
+  }
+
+  // ── Equity projection chart (60 days, based on last 30 active days EV) ──
+  const _recent=_jActive.slice(-30);
+  const _latestSeedVal=+latestJnl?.totalSeed||0;
+  if(_latestSeedVal>0&&_recent.length>=10){
+    const rW=_recent.filter(e=>+e.profit>0).length;
+    const rWR=rW/_recent.length;
+    const rAvgW=rW?_recent.filter(e=>+e.profit>0).reduce((a,e)=>a+(+e.profit),0)/rW:0;
+    const rL=_recent.filter(e=>+e.profit<0).length;
+    const rAvgL=rL?Math.abs(_recent.filter(e=>+e.profit<0).reduce((a,e)=>a+(+e.profit),0)/rL):0;
+    const ev=rWR*rAvgW-(1-rWR)*rAvgL; // expected value per trading day ($)
+    const PROJ=60;
+    const projDates=[],base=[],opt=[],pess=[];
+    const _startD=new Date((latestJnl?.date||new Date().toISOString().slice(0,10))+'T12:00:00');
+    for(let i=0;i<=PROJ;i++){
+      const d=new Date(_startD);d.setDate(d.getDate()+i);
+      projDates.push(d.toISOString().slice(0,10));
+      base.push(+(_latestSeedVal+ev*i).toFixed(2));
+      // optimistic: winRate +10%p, loss -20%; pessimistic: winRate -10%p, loss +20%
+      const evOpt=(rWR+.1)*rAvgW-(1-rWR-.1)*(rAvgL*.8);
+      const evPess=(rWR-.1)*rAvgW-(1-rWR+.1)*(rAvgL*1.2);
+      opt.push(+(_latestSeedVal+evOpt*i).toFixed(2));
+      pess.push(+(_latestSeedVal+evPess*i).toFixed(2));
+    }
+    const projColor=ev>=0?'rgba(76,175,122,.85)':'rgba(207,102,121,.85)';
+    mkMultiLine('chart-equity-proj',projDates,[
+      {label:'기대 추정',data:base,borderColor:projColor,backgroundColor:ev>=0?'rgba(76,175,122,.08)':'rgba(207,102,121,.08)',fill:true,tension:.1,pointRadius:0,borderWidth:2.5},
+      {label:'낙관 시나리오',data:opt,borderColor:'rgba(76,175,122,.55)',borderDash:[6,4],fill:false,tension:.1,pointRadius:0,borderWidth:1.2},
+      {label:'보수 시나리오',data:pess,borderColor:'rgba(207,102,121,.55)',borderDash:[6,4],fill:false,tension:.1,pointRadius:0,borderWidth:1.2},
+    ]);
+  } else {
+    CH['chart-equity-proj']?.destroy();
+  }
 }
 
 /* ── Journal Spreadsheet ── */
@@ -2530,6 +2591,11 @@ function mkLine(id,labels,data){
 function mkDonut(id,wins,losses){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
   CH[id]=new Chart(ctx,{type:'doughnut',data:{labels:['승','패'],datasets:[{data:[wins,losses],backgroundColor:['rgba(76,175,122,.8)','rgba(207,102,121,.8)'],borderWidth:0}]},options:{animation:{duration:0},responsive:true,plugins:{legend:{labels:{color:txDim(),font:{size:11}}}}}});
+}
+function mkMultiLine(id,labels,datasets){
+  CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
+  const td=txDim();
+  CH[id]=new Chart(ctx,{type:'line',data:{labels,datasets:datasets.map(d=>({tension:.3,pointRadius:1,...d}))},options:{animation:{duration:0},responsive:true,plugins:{legend:{display:true,labels:{color:td,font:{size:10},boxWidth:16,padding:6}}},scales:mkCA()}});
 }
 function mkBar(id,labels,data,color){
   CH[id]?.destroy();const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
