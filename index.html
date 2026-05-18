@@ -336,8 +336,9 @@
     /* AI Coach Chat */
     #ai-fab{position:fixed;right:22px;bottom:22px;width:52px;height:52px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;font-size:1.4rem;color:var(--bg);z-index:600;box-shadow:0 4px 20px rgba(0,0,0,.45);transition:transform .15s;display:flex;align-items:center;justify-content:center;font-family:inherit}
     #ai-fab:hover{transform:scale(1.1)}
-    #ai-panel{position:fixed;right:22px;bottom:86px;width:390px;max-height:600px;background:var(--bg2);border:1px solid var(--bd);border-radius:16px;display:flex;flex-direction:column;z-index:599;box-shadow:0 12px 48px rgba(0,0,0,.55);transform:translateY(14px) scale(.97);opacity:0;pointer-events:none;transition:all .22s cubic-bezier(.4,0,.2,1)}
+    #ai-panel{position:fixed;right:22px;bottom:86px;width:390px;max-height:600px;background:var(--bg2);border:1px solid var(--bd);border-radius:16px;display:flex;flex-direction:column;z-index:599;box-shadow:0 12px 48px rgba(0,0,0,.55);transform:translateY(14px) scale(.97);opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1)}
     #ai-panel.open{transform:translateY(0) scale(1);opacity:1;pointer-events:all}
+    #ai-panel.expanded{right:50%;bottom:50%;width:min(820px,92vw);max-height:88vh;border-radius:20px;transform:translate(50%,50%) !important}
     #ai-panel-hd{padding:13px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0}
     #ai-panel-cfg{padding:10px 14px;border-bottom:1px solid var(--bd);display:none;flex-shrink:0}
     #ai-panel-msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:160px}
@@ -1072,14 +1073,7 @@ function renderDashboard(){
             }).join('');
           })()}
         </div>
-        <div style="margin-top:16px;background:var(--bg3);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px">
-          <div style="font-size:1.8rem;line-height:1">🤖</div>
-          <div style="flex:1">
-            <div style="font-size:.86rem;font-weight:600;margin-bottom:3px">AI 트레이딩 코치</div>
-            <div style="font-size:.76rem;color:var(--tx2)">내 매매 데이터 기반 맞춤 상담 · 전략 분석 · 개선 방향</div>
-          </div>
-          <button onclick="openAiChat()" style="background:var(--ac);border:none;border-radius:8px;color:var(--bg);padding:8px 16px;cursor:pointer;font-size:.82rem;font-weight:600;white-space:nowrap;font-family:inherit">상담 시작 →</button>
-        </div>`;
+        `;
     } else {
       jnlEl.innerHTML='';
     }
@@ -1204,6 +1198,15 @@ function openAiChat(preMsg){
 function toggleAiCfg(){
   const el=document.getElementById('ai-panel-cfg');
   if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function toggleAiExpand(){
+  const panel=document.getElementById('ai-panel');
+  const btn=document.getElementById('ai-expand-btn');
+  if(!panel)return;
+  const isExp=panel.classList.toggle('expanded');
+  if(btn)btn.textContent=isExp?'⊡':'⛶';
+  if(btn)btn.title=isExp?'축소':'확대';
 }
 
 async function detectAiModel(key){
@@ -3126,13 +3129,14 @@ window.undoImport=async function(){
     <div id="ai-panel-hd">
       <span style="font-size:1.1rem">🤖</span>
       <span style="font-weight:600;font-size:.9rem;flex:1">AI 트레이딩 코치</span>
-      <button onclick="toggleAiCfg()" title="설정" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:1rem;padding:2px 6px">⚙️</button>
+      <button id="ai-expand-btn" onclick="toggleAiExpand()" title="확대/축소" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:1rem;padding:2px 6px">⛶</button>
+      <button onclick="toggleAiCfg()" title="API Key 설정" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:1rem;padding:2px 6px">⚙️</button>
       <button onclick="toggleAiChat()" style="background:none;border:none;cursor:pointer;color:var(--tx2);font-size:1.1rem;padding:2px 6px">✕</button>
     </div>
     <div id="ai-panel-cfg">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <input type="password" id="ai-key-inp" placeholder="Gemini API Key (AIza...)" style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--tx);padding:6px 10px;font-family:inherit;font-size:.80rem;outline:none">
-        <button onclick="(()=>{const k=document.getElementById('ai-key-inp').value.trim();if(k){localStorage.setItem('hb_ai_key',k);detectAiModel(k);}})()" style="background:var(--ac);border:none;border-radius:6px;color:var(--bg);padding:6px 12px;cursor:pointer;font-size:.80rem;font-family:inherit">저장</button>
+        <button onclick="(()=>{const k=document.getElementById('ai-key-inp').value.trim();if(k){localStorage.setItem('hb_ai_key',k);detectAiModel(k);document.getElementById('ai-panel-cfg').style.display='none';}})()" style="background:var(--ac);border:none;border-radius:6px;color:var(--bg);padding:6px 12px;cursor:pointer;font-size:.80rem;font-family:inherit">저장</button>
       </div>
       <div style="font-size:.72rem;color:var(--tx2);margin-top:6px">모델: <span id="ai-model-ind" style="color:var(--ac)">감지 중…</span> &nbsp;·&nbsp; <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--ac)">키 발급 →</a></div>
     </div>
