@@ -190,6 +190,9 @@
     .jnl-sep-stat{font-size:.68rem;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;background:var(--bg3);color:var(--tx2)}
     .jnl-sep-stat.pos{background:var(--green-dim);color:var(--green)}
     .jnl-sep-stat.neg{background:var(--red-dim);color:var(--red)}
+    /* cashFlow row highlight */
+    .jnl-cashflow-row td{background:rgba(168,120,232,.07)!important}
+    .jnl-cashflow-row td:first-child::after{content:' ⇄';color:var(--ac);font-size:.7rem;opacity:.75}
     /* Redesign: tether gold, date compact, computed bg */
     .jnl-tether-cell{color:var(--ac)!important;font-weight:500}
     .jnl-date-cell{min-width:72px;font-variant-numeric:tabular-nums}
@@ -1047,8 +1050,12 @@ const JNL_COLS=[
     autoFillDesc:'총시드 × 테더 자동계산 (읽기전용)',
     computed:e=>{const s=+e.totalSeed||0,t=+e.tether||0;return s&&t?Math.round(s*t):null;}},
   // P&L (Col J, K, N, O, P)
+  {key:'cashFlow',      label:'출입금($)',   fmt:'pnl',
+    autoFillDesc:'출금(+) · 입금(-) 입력 시 수익금 자동보정. 출금 $1,000 → +1000',
+    get:e=>e.cashFlow||0,
+    upd:v=>({cashFlow:+v||0})},
   {key:'profit',        label:'수익금($)',   fmt:'pnl', autoFill:true,
-    autoFillDesc:'총시드 - 전일 총시드(시드시작) 자동계산',
+    autoFillDesc:'총시드 + 출입금 - 시드시작 자동계산 (출금/입금 보정 포함)',
     get:e=>e.profit,
     upd:v=>({profit:+v||0})},
   {key:'rate',          label:'수익률',      fmt:'pct',
@@ -1220,7 +1227,8 @@ window.renderJournal=function(){
       return`<td><span class="jnl-cell-view ${extraCls}" ${dv}>${disp}</span></td>`;
     }).join('');
 
-    return sepRow+`<tr data-id="${e.id}">
+    const hasCF=!!+e.cashFlow;
+    return sepRow+`<tr data-id="${e.id}"${hasCF?' class="jnl-cashflow-row"':''}>
       <td class="jnl-n">${n}</td>
       <td><span class="jnl-cell-view jnl-date-cell" data-id="${e.id}" data-key="date" data-val="${e.date||''}" onclick="jnlEdit(this)">${fmtJnlDate(e.date)}</span></td>
       ${cols}
@@ -1324,12 +1332,12 @@ window.jnlEdit=function(span){
           if(comp){const krwCol=JNL_COLS.find(c=>c.key==='krwSeed');
             if(krwCol?.computed){const v=krwCol.computed(entry);comp.innerHTML=v!=null?jnlFmt(v,'krw'):'<span style="opacity:.35">—</span>';}}}
       }
-      // ── Auto-compute profit = totalSeed - seedStart ──
-      const _pDeps=['upbit','bithumb','binance','tether','totalSeed','seedStart'];
+      // ── Auto-compute profit = totalSeed + cashFlow - seedStart ──
+      const _pDeps=['upbit','bithumb','binance','tether','totalSeed','seedStart','cashFlow'];
       if((_pDeps.includes(key)&&!isDate)||_newTS!==null){
-        const ts=+entry.totalSeed||0,ss=+entry.seedStart||0;
+        const ts=+entry.totalSeed||0,ss=+entry.seedStart||0,cf=+entry.cashFlow||0;
         if(ts&&ss){
-          const _newP=+(ts-ss).toFixed(4);
+          const _newP=+(ts+cf-ss).toFixed(4);
           if(Math.abs(_newP-(+entry.profit||0))>0.001){
             entry.profit=_newP;
             await db.collection('trading_journal').doc(id).update({profit:_newP});
@@ -1353,10 +1361,10 @@ window.jnlEdit=function(span){
         if(carryTS!==null){
           nextUpdate.seedStart=carryTS;_nextE.seedStart=carryTS;
           nextDomUpdates.push({key:'seedStart',val:carryTS});
-          // also compute next row's profit
-          const nextTS=+_nextE.totalSeed||0;
+          // also compute next row's profit (include next row's own cashFlow)
+          const nextTS=+_nextE.totalSeed||0,nextCF=+_nextE.cashFlow||0;
           if(nextTS&&carryTS){
-            const nextP=+(nextTS-carryTS).toFixed(4);
+            const nextP=+(nextTS+nextCF-carryTS).toFixed(4);
             if(Math.abs(nextP-(+_nextE.profit||0))>0.001){
               nextUpdate.profit=nextP;_nextE.profit=nextP;
               nextDomUpdates.push({key:'profit',val:nextP});
@@ -1423,7 +1431,7 @@ window.addJnlRow=async function(){
     },
     seedStart:prev?.totalSeed||0,
     totalSeed:0,profit:0,rate:0,tether,
-    personalPnl:0,personalCumPnl:0,stopAlert:'',memo:'',
+    cashFlow:0,personalPnl:0,personalCumPnl:0,stopAlert:'',memo:'',
     userId:getCurUid(),createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   try{
@@ -1697,6 +1705,7 @@ window.exportJournalXLSX=function(){
       '테더(₩/$)':t||'',
       '총시드($)':s||'',
       '원화시드(₩)':s&&t?Math.round(s*t):'',
+      '출입금($)':+e.cashFlow||'',
       '수익금($)':+e.profit||'',
       '수익률(%)':+e.rate||'',
       '개인손익':+e.personalPnl||'',
