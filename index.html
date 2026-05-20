@@ -940,6 +940,81 @@ async function recalcCumulatives(){
   await batch.commit();
 }
 
+/* ── HK Personal Stats Helper ── */
+function getHkPersonalStats(jnlSorted){
+  if(getCurUid()!=='hk')return null;
+  const active=jnlSorted.filter(e=>+e.personalPnl!==0);
+  if(!active.length)return null;
+  const wins=active.filter(e=>+e.personalPnl>0);
+  const losses=active.filter(e=>+e.personalPnl<0);
+  const wr=(wins.length/active.length*100).toFixed(1);
+  const latest=[...jnlSorted].reverse().find(e=>+e.personalCumPnl);
+  const cumPnl=+latest?.personalCumPnl||0;
+  const grossW=wins.reduce((a,e)=>a+(+e.personalPnl||0),0);
+  const grossL=Math.abs(losses.reduce((a,e)=>a+(+e.personalPnl||0),0));
+  const avgW=wins.length?(grossW/wins.length).toFixed(2):0;
+  const avgL=losses.length?(grossL/losses.length).toFixed(2):0;
+  const pf=grossL?(grossW/grossL).toFixed(2):wins.length?'∞':'—';
+  const avgD=active.length?(active.reduce((a,e)=>a+(+e.personalPnl||0),0)/active.length).toFixed(2):0;
+  const ev=+(+wr/100*+avgW-(1-+wr/100)*+avgL).toFixed(2);
+  const curM=new Date().toISOString().slice(0,7);
+  const mthPnl=jnlSorted.filter(e=>e.date?.startsWith(curM)).reduce((a,e)=>a+(+e.personalPnl||0),0);
+  // Day-of-week (KD index = getDay(): 0=일,1=월,...,6=토)
+  const KD=['일','월','화','수','목','금','토'];
+  const ds={};KD.forEach(d=>{ds[d]={n:0,win:0,pnl:0};});
+  jnlSorted.forEach(e=>{
+    if(!e.date||!+e.personalPnl)return;
+    const d=KD[new Date(e.date+'T12:00:00').getDay()];
+    ds[d].n++;ds[d].pnl+=+e.personalPnl;if(+e.personalPnl>0)ds[d].win++;
+  });
+  // Month-of-year
+  const ms={};for(let i=1;i<=12;i++)ms[i]={n:0,win:0,pnl:0};
+  jnlSorted.forEach(e=>{
+    if(!e.date||!+e.personalPnl)return;
+    const m=+e.date.slice(5,7);ms[m].n++;ms[m].pnl+=+e.personalPnl;if(+e.personalPnl>0)ms[m].win++;
+  });
+  // Streaks
+  let streak=0,maxW=0,maxL=0,sType=null,wStart='',wEnd='',lStart='',lEnd='',curSt='',curEn='';
+  jnlSorted.forEach(e=>{
+    const p=+e.personalPnl||0;if(!p)return;
+    const t=p>0?'w':'l';
+    if(t===sType){streak++;curEn=e.date;}else{streak=1;sType=t;curSt=e.date;curEn=e.date;}
+    if(t==='w'&&streak>maxW){maxW=streak;wStart=curSt;wEnd=curEn;}
+    if(t==='l'&&streak>maxL){maxL=streak;lStart=curSt;lEnd=curEn;}
+  });
+  return{active,wins,losses,wr,cumPnl,grossW,grossL,avgW,avgL,pf,avgD,ev,mthPnl,KD,ds,ms,maxW,maxL,wStart,wEnd,lStart,lEnd};
+}
+
+function buildHkDashSection(jnlSorted){
+  const st=getHkPersonalStats(jnlSorted);
+  if(!st)return'';
+  const{active,wins,losses,wr,cumPnl,grossW,grossL,avgW,avgL,pf,avgD,ev,mthPnl,KD,ds,maxW,maxL,wStart,wEnd,lStart,lEnd}=st;
+  const dayBars=KD.filter(d=>ds[d].n>0).map(d=>{
+    const wr2=Math.round(ds[d].win/ds[d].n*100);
+    const avg2=+(ds[d].pnl/ds[d].n).toFixed(1);
+    return'<div style="background:var(--bg3);border-radius:8px;padding:12px 10px;text-align:center;min-width:58px;flex:1">'
+      +'<div style="font-size:.80rem;color:var(--tx2);margin-bottom:4px;font-weight:500">'+d+'</div>'
+      +'<div style="font-size:1.15rem;font-weight:700;line-height:1.1" class="'+(wr2>=50?'pos':'neg')+'">'+wr2+'%</div>'
+      +'<div style="font-size:.74rem;color:var(--tx2);margin-top:4px">'+ds[d].n+'일</div>'
+      +'<div style="font-size:.78rem;font-weight:500;margin-top:2px" class="'+(avg2>=0?'pos':'neg')+'">'+(avg2>=0?'+':'-')+'$'+fmtN(Math.abs(avg2))+'</div>'
+      +'</div>';
+  }).join('');
+  return'<div class="section-label" style="margin-top:24px;margin-bottom:10px;border-top:1px solid var(--bd);padding-top:16px">👤 김한결 개인손익 분석 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· personalPnl 기반</span></div>'
+    +'<div class="stat-grid">'
+    +'<div class="stat-card c-ac"><div class="stat-label">개인 누적손익</div><div class="stat-value '+(cumPnl>=0?'pos':'neg')+'">'+(cumPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(cumPnl).toFixed(2)))+'</div><div class="stat-sub">최신 personalCumPnl</div></div>'
+    +'<div class="stat-card '+(mthPnl>=0?'c-green':'c-red')+'"><div class="stat-label">이번달 개인손익</div><div class="stat-value '+(mthPnl>=0?'pos':'neg')+'">'+(mthPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(mthPnl).toFixed(2)))+'</div></div>'
+    +'<div class="stat-card '+(+wr>=50?'c-green':'c-red')+'"><div class="stat-label">개인 일간 승률</div><div class="stat-value">'+wr+'%</div><div class="stat-sub">'+wins.length+'수익 '+losses.length+'손실 ('+active.length+'일)</div></div>'
+    +'<div class="stat-card '+(+avgD>=0?'c-green':'c-red')+'"><div class="stat-label">일평균 개인손익</div><div class="stat-value '+(+avgD>=0?'pos':'neg')+'">'+(+avgD>=0?'+':'-')+'$'+fmtN(Math.abs(+avgD))+'</div></div>'
+    +'<div class="stat-card '+(ev>=0?'c-green':'c-red')+'"><div class="stat-label">개인 기대값 EV/일</div><div class="stat-value '+(ev>=0?'pos':'neg')+'">'+(ev>=0?'+':'-')+'$'+fmtN(Math.abs(ev))+'</div><div class="stat-sub">승률×평균수익 − 패률×평균손실</div></div>'
+    +'<div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">'+maxW+'일</div>'+(wStart?'<div class="stat-sub">'+wStart+'~'+wEnd.slice(5)+'</div>':'')+'</div>'
+    +'<div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">'+maxL+'일</div>'+(lStart?'<div class="stat-sub">'+lStart+'~'+lEnd.slice(5)+'</div>':'')+'</div>'
+    +'<div class="stat-card '+(+pf>=1||pf==='∞'?'c-green':'c-red')+'"><div class="stat-label">개인 P-Factor</div><div class="stat-value">'+pf+'</div><div class="stat-sub">수익 $'+fmtN(+(grossW).toFixed(2))+' / 손실 $'+fmtN(+(grossL).toFixed(2))+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$'+fmtN(avgW)+'</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$'+fmtN(avgL)+'</span></div></div>'
+    +'</div>'
+    +'<div class="section-label" style="margin-top:18px;margin-bottom:8px">📅 요일별 개인손익 패턴</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+dayBars+'</div>';
+}
+
 /* ── Dashboard ── */
 function renderDashboard(){
   const n=trades.length;
@@ -1075,6 +1150,7 @@ function renderDashboard(){
             }).join('');
           })()}
         </div>
+        ${buildHkDashSection(jnlSorted)}
         `;
     } else {
       jnlEl.innerHTML='';
@@ -2259,10 +2335,12 @@ function renderJnlBalancePanel(){
   const el=document.getElementById('trades-balance-inner');if(!el)return;
   if(!journal.length){el.innerHTML='<div style="padding:12px 14px;font-size:.80rem;color:var(--tx2)">매매일지 데이터 없음</div>';return;}
   const rows=[...journal].sort((a,b)=>b.date>a.date?1:-1).slice(0,90);
+  const isHkBal=getCurUid()==='hk';
   const html=`<div style="overflow-x:auto;padding:0 0 4px">
     <table class="bal-tbl">
       <thead><tr>
         <th>날짜</th><th>총시드($)</th><th>일손익($)</th><th>수익률</th><th>테더(₩)</th><th>강제종료</th>
+        ${isHkBal?'<th style="color:var(--ac)">개인손익($)</th><th style="color:var(--ac)">개인누적($)</th>':''}
       </tr></thead>
       <tbody>${rows.map(e=>{
         const p=+e.profit||0,r=+e.rate||0,s=+e.totalSeed||0,t=+e.tether||0;
@@ -2271,6 +2349,7 @@ function renderJnlBalancePanel(){
         const stopCls=stop?'bal-stop':'';
         const pSign=p>=0?'+':'-';
         const stopColor=stop.includes('DAY STOP')?'var(--red)':stop.includes('WARNING')?'#e0a060':'var(--ac)';
+        const pp=+e.personalPnl||0,pc=+e.personalCumPnl||0;
         return`<tr class="${cls} ${stopCls}">
           <td>${e.date}</td>
           <td>${s?'$'+fmtN(s):'—'}</td>
@@ -2278,6 +2357,7 @@ function renderJnlBalancePanel(){
           <td class="${r>0?'pos':r<0?'neg':''}">${r?(r>=0?'+':'')+r.toFixed(2)+'%':'—'}</td>
           <td>${t?t.toLocaleString('ko-KR'):'—'}</td>
           <td>${stop?`<span style="color:${stopColor};font-weight:600;font-size:.72rem">${stop}</span>`:'—'}</td>
+          ${isHkBal?`<td class="${pp>0?'pos':pp<0?'neg':''}">${pp?(pp>=0?'+':'-')+'$'+fmtN(Math.abs(pp)):'—'}</td><td class="${pc>0?'pos':pc<0?'neg':''}">${pc?(pc>=0?'+':'-')+'$'+fmtN(Math.abs(pc)):'—'}</td>`:''}
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -2595,6 +2675,82 @@ function renderSeasonality(){
     mkBar('chart-s-mpnl',ML,mpnlArr,mpnlArr.map(v=>v>=0?'rgba(76,175,122,.75)':'rgba(207,102,121,.75)'));
     mkBar('chart-s-mfreq',ML,mfreqArr,accent()+'b3');
   });
+
+  // ── HK 개인손익 시즈널리티 ──
+  if(getCurUid()==='hk'){
+    const jnlSortedSn=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+    const hkSt=getHkPersonalStats(jnlSortedSn);
+    if(hkSt){
+      const{KD,ds,ms}=hkSt;
+      const MONTHS_KR=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+      // Day table (KD order: 일,월,...,토)
+      const hkDayRows=KD.map(d=>{
+        const s=ds[d];
+        if(!s.n)return'<tr style="opacity:.35"><td>'+d+'</td><td colspan="4" style="font-size:.75rem;color:var(--tx2)">데이터 없음</td></tr>';
+        const wr=(s.win/s.n*100).toFixed(1);const wrN=+wr;
+        const avg=(s.pnl/s.n).toFixed(2);const avgN=+avg;
+        const warn=s.n<5?'<span style="color:var(--tx2);font-size:.68rem"> ⚠️</span>':'';
+        return'<tr>'
+          +'<td style="font-weight:500">'+d+'</td>'
+          +'<td>'+s.n+'건'+warn+'</td>'
+          +'<td class="'+(wrN>=50?'pos':'neg')+'">'+wr+'%</td>'
+          +'<td class="'+(avgN>=0?'pos':'neg')+'">'+(avgN>=0?'+':'')+avg+'$</td>'
+          +'<td class="'+(s.pnl>=0?'pos':'neg')+'">'+(s.pnl>=0?'+':'')+s.pnl.toFixed(2)+'$</td>'
+          +'</tr>';
+      }).join('');
+      // Month table
+      const hkMonthRows=[1,2,3,4,5,6,7,8,9,10,11,12].map(i=>{
+        const s=ms[i];
+        if(!s.n)return'<tr style="opacity:.35"><td>'+MONTHS_KR[i-1]+'</td><td colspan="4" style="font-size:.75rem;color:var(--tx2)">데이터 없음</td></tr>';
+        const wr=(s.win/s.n*100).toFixed(1);const wrN=+wr;
+        const avg=(s.pnl/s.n).toFixed(2);const avgN=+avg;
+        const warn=s.n<5?'<span style="color:var(--tx2);font-size:.68rem"> ⚠️</span>':'';
+        return'<tr>'
+          +'<td style="font-weight:500">'+MONTHS_KR[i-1]+'</td>'
+          +'<td>'+s.n+'건'+warn+'</td>'
+          +'<td class="'+(wrN>=50?'pos':'neg')+'">'+wr+'%</td>'
+          +'<td class="'+(avgN>=0?'pos':'neg')+'">'+(avgN>=0?'+':'')+avg+'$/일</td>'
+          +'<td class="'+(s.pnl>=0?'pos':'neg')+'">'+(s.pnl>=0?'+':'')+s.pnl.toFixed(2)+'$</td>'
+          +'</tr>';
+      }).join('');
+      // Mon-Sun display order for chart labels
+      const HK_DL=['월','화','수','목','금','토','일'];
+      const hkDwrArr=HK_DL.map(d=>ds[d].n?+(ds[d].win/ds[d].n*100).toFixed(1):0);
+      const hkDpnlArr=HK_DL.map(d=>ds[d].n?+(ds[d].pnl/ds[d].n).toFixed(2):0);
+      const hkMpnlArr=[1,2,3,4,5,6,7,8,9,10,11,12].map(i=>ms[i].n?+(ms[i].pnl/ms[i].n).toFixed(2):0);
+      const hkMfreqArr=[1,2,3,4,5,6,7,8,9,10,11,12].map(i=>ms[i].n);
+      bodyEl.innerHTML+=`
+        <div class="section-label" style="margin-top:32px;border-top:1px solid var(--bd);padding-top:20px">👤 김한결 개인손익 시즈널리티 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· personalPnl 기반 · ${hkSt.active.length}거래일</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px">
+          <div class="chart-card"><h3>요일별 개인 승률 (%)</h3><canvas id="chart-hk-dwr"></canvas></div>
+          <div class="chart-card"><h3>요일별 개인 평균손익 ($)</h3><canvas id="chart-hk-dpnl"></canvas></div>
+        </div>
+        <div class="table-card" style="margin-top:14px">
+          <div class="table-card-hdr"><h3>요일별 개인손익 상세</h3></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>요일</th><th>거래수</th><th>승률</th><th>평균손익</th><th>누적기여</th></tr></thead>
+            <tbody>${hkDayRows}</tbody>
+          </table></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+          <div class="chart-card"><h3>월별 개인 평균일손익 ($)</h3><canvas id="chart-hk-mpnl"></canvas></div>
+          <div class="chart-card"><h3>월별 개인 거래 횟수</h3><canvas id="chart-hk-mfreq"></canvas></div>
+        </div>
+        <div class="table-card" style="margin-top:14px">
+          <div class="table-card-hdr"><h3>월별 개인손익 상세</h3></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>월</th><th>거래수</th><th>승률</th><th>평균손익/일</th><th>누적기여</th></tr></thead>
+            <tbody>${hkMonthRows}</tbody>
+          </table></div>
+        </div>`;
+      requestAnimationFrame(()=>{
+        mkBar('chart-hk-dwr', HK_DL,hkDwrArr, hkDwrArr.map(v=>v>=50?'rgba(76,175,122,.75)':'rgba(207,102,121,.75)'));
+        mkBar('chart-hk-dpnl',HK_DL,hkDpnlArr,hkDpnlArr.map(v=>v>=0?'rgba(76,175,122,.75)':'rgba(207,102,121,.75)'));
+        mkBar('chart-hk-mpnl',ML,hkMpnlArr, hkMpnlArr.map(v=>v>=0?'rgba(76,175,122,.75)':'rgba(207,102,121,.75)'));
+        mkBar('chart-hk-mfreq',ML,hkMfreqArr,accent()+'b3');
+      });
+    }
+  }
 }
 
 /* ── Binance klines (캡처용) ── */
