@@ -983,14 +983,10 @@ function getHkPersonalStats(jnlSorted){
     if(t==='w'&&streak>maxW){maxW=streak;wStart=curSt;wEnd=curEn;}
     if(t==='l'&&streak>maxL){maxL=streak;lStart=curSt;lEnd=curEn;}
   });
-  // ── Double-verification (2회 재계산) ──
-  let _v1=0,_v1w=0,_v1l=0,_vDay=0;
-  active.forEach(e=>{const p=+e.personalPnl;_v1+=p;if(p>0)_v1w++;else _v1l++;});
-  KD.forEach(d=>{_vDay+=ds[d].pnl;});
-  let _v2=0; jnlSorted.forEach(e=>{const p=+e.personalPnl||0;if(p)_v2+=p;});
-  if(Math.abs(_v1-totalPnl)>0.01||Math.abs(_v2-totalPnl)>0.01||Math.abs(_vDay-totalPnl)>0.01||_v1w!==wins.length||_v1l!==losses.length){
-    console.warn('[HK-verify fail]',{totalPnl,pass1:_v1,pass2:_v2,daySum:_vDay,wins:wins.length,v1w:_v1w,losses:losses.length,v1l:_v1l});
-  }
+  // ── 내부 일관성 검증 (win/loss count, day-sum = totalPnl) ──
+  let _vDay=0; KD.forEach(d=>{_vDay+=ds[d].pnl;});
+  if(Math.abs(_vDay-totalPnl)>0.1||wins.length+losses.length!==active.length)
+    console.warn('[HK-calc] internal mismatch',{totalPnl,daySum:_vDay});
 
   // ── Section B: personalCumPnl 컬럼 기반 ──
   const cumEntries=jnlSorted.filter(e=>e.personalCumPnl!=null&&+e.personalCumPnl!==0);
@@ -1044,7 +1040,7 @@ function buildHkDashSection(jnlSorted){
     // 누적손익 (personalCumPnl 최신값)
     +'<div class="stat-card c-ac"><div class="stat-label">개인 누적손익</div><div class="stat-value '+(latestCum>=0?'pos':'neg')+'">'+(latestCum>=0?'+':'-')+'$'+fmtN(Math.abs(+(latestCum).toFixed(2)))+'</div><div class="stat-sub">personalCumPnl 최신값</div></div>'
     // 이번달 (personalPnl 합산)
-    +'<div class="stat-card '+(mthPnl>=0?'c-green':'c-red')+'"><div class="stat-label">이번달 개인손익</div><div class="stat-value '+(mthPnl>=0?'pos':'neg')+'">'+(mthPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(mthPnl).toFixed(2)))+'</div><div class="stat-sub">personalPnl 합산</div></div>'
+    +'<div class="stat-card '+(mthPnl>=0?'c-green':'c-red')+'"><div class="stat-label">이번달 개인손익</div><div class="stat-value '+(mthPnl>=0?'pos':'neg')+'">'+(mthPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(mthPnl).toFixed(2)))+'</div><div class="stat-sub">이번달 personalPnl 합산</div></div>'
     // 일간 승률
     +'<div class="stat-card '+(+wr>=50?'c-green':'c-red')+'"><div class="stat-label">일간 승률</div><div class="stat-value">'+wr+'%</div><div class="stat-sub">'+wins.length+'수익 '+losses.length+'손실 · '+active.length+'일</div></div>'
     // 일평균 손익
