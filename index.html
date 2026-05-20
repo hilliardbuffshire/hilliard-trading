@@ -411,6 +411,7 @@
       <div class="nav-item" data-view="seasonality"><span class="ni">📈</span> 시즈널리티</div>
       <div class="nav-item" data-view="personal" id="nav-personal" style="display:none"><span class="ni">👤</span> 개인매매</div>
       <div class="nav-item" data-view="ai"><span class="ni">🤖</span> AI 분석</div>
+      <div class="nav-item" data-view="coach"><span class="ni">📝</span> 코치 로그</div>
     </nav>
     <div class="sb-foot">
       <div class="user-name" id="user-name">—</div>
@@ -588,6 +589,15 @@
           <tbody id="ai-tbody"></tbody>
         </table></div>
       </div>
+    </section>
+
+    <!-- Coach Log -->
+    <section id="view-coach" class="view">
+      <div class="page-header">
+        <div class="page-title">코치 로그<span>AI Trading Coach History</span></div>
+        <button class="btn btn-secondary" onclick="clearCoachLog()" style="font-size:.75rem;padding:6px 12px">🗑 전체 삭제</button>
+      </div>
+      <div id="coach-content"></div>
     </section>
   </main>
 </div>
@@ -833,6 +843,7 @@ window.setTheme=function(t){
   if(v==='trades')      renderTradesCurve();
   if(v==='seasonality') renderSeasonality();
   if(v==='personal')    renderPersonalView();
+  if(v==='coach')       renderCoachView();
 };
 (()=>{const t=localStorage.getItem('hb_theme')||'gold';document.documentElement.setAttribute('data-theme',t);document.querySelectorAll('.theme-dot').forEach(d=>d.classList.toggle('active',d.dataset.t===t));})();
 
@@ -871,6 +882,7 @@ window.switchUser=async function(id){
   if(v==='journal')renderJournal();
   if(v==='seasonality')renderSeasonality();
   if(v==='personal')renderPersonalView();
+  if(v==='coach')renderCoachView();
 };
 window.addUser=function(){
   const name=prompt('새 사용자 이름:');
@@ -935,6 +947,7 @@ window.goTo=function(v){
   if(v==='seasonality') renderSeasonality();
   if(v==='ai')          renderAIView();
   if(v==='personal')    renderPersonalView();
+  if(v==='coach')       renderCoachView();
 };
 
 
@@ -1010,11 +1023,19 @@ function getHkPersonalStats(jnlSorted){
     ds[d].n++;ds[d].pnl+=e.delta;if(e.delta>0)ds[d].win++;
   });
 
-  // 월별 통계 (delta 기준)
+  // 월별 통계 (delta 기준) — 캘린더 월 집계 (차트용)
   const ms={};for(let i=1;i<=12;i++)ms[i]={n:0,win:0,pnl:0};
   deltas.forEach(e=>{
     if(!e.date)return;
     const m=+e.date.slice(5,7);ms[m].n++;ms[m].pnl+=e.delta;if(e.delta>0)ms[m].win++;
+  });
+  // 연도별 월 집계 (YYYY-MM) — 테이블용, 연도 구분 포함
+  const msByYM={};
+  deltas.forEach(e=>{
+    if(!e.date)return;
+    const ym=e.date.slice(0,7);
+    if(!msByYM[ym])msByYM[ym]={n:0,win:0,pnl:0};
+    msByYM[ym].n++;msByYM[ym].pnl+=e.delta;if(e.delta>0)msByYM[ym].win++;
   });
 
   // 연승/연패 (delta 기준)
@@ -1064,7 +1085,7 @@ function getHkPersonalStats(jnlSorted){
     active:deltas, wins, losses, wr,
     totalPnl, grossW:+grossW.toFixed(2), grossL:+grossL.toFixed(2),
     avgW, avgL, pf, avgD, ev, mthPnl,
-    KD, ds, ms, maxW, maxL, wStart, wEnd, lStart, lEnd,
+    KD, ds, ms, msByYM, maxW, maxL, wStart, wEnd, lStart, lEnd,
     latestCum, peakCum, peakDate, troughCum, troughDate, curDD, cumMddPct,
     bestMthKey, bestMthChange:+bestMthChange.toFixed(2),
     worstMthKey, worstMthChange:+worstMthChange.toFixed(2), mthCumChange
@@ -1465,6 +1486,15 @@ async function sendAiMsg(text){
     return;
   }
 
+  // 메트릭 스냅샷 (코치 로그용)
+  const _jSnap=[...journal].sort((a,b)=>a.date>b.date?1:-1);
+  const _jAct=_jSnap.filter(e=>+e.profit!==0);
+  const _snapWr=_jAct.length?(+(_jAct.filter(e=>+e.profit>0).length/_jAct.length*100).toFixed(1)):0;
+  const _snapCumP=+_jAct.reduce((a,e)=>a+(+e.profit||0),0).toFixed(2);
+  const _snapSeed=+(_jSnap.slice(-1)[0]?.totalSeed||0);
+  const _snapHkCum=getCurUid()==='hk'?(+(_jSnap.filter(e=>e.personalCumPnl!=null).slice(-1)[0]?.personalCumPnl||0)):null;
+  const _snapMetrics={wr:_snapWr,cumP:_snapCumP,seed:_snapSeed,n:_jAct.length,hkCum:_snapHkCum,date:new Date().toISOString().slice(0,10)};
+
   _aiMsgs.push({role:'user',text:q});
   _aiMsgs.push({role:'ai',text:'⏳ 분석 중…',thinking:true});
   renderAiMsgs();
@@ -1476,12 +1506,19 @@ async function sendAiMsg(text){
   try{
     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${_aiModel}:generateContent?key=${key}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents,generationConfig:{temperature:.7,maxOutputTokens:1024}})
+      body:JSON.stringify({contents,generationConfig:{temperature:.7,maxOutputTokens:4096}})
     });
     const d=await r.json();
     if(d.error)throw new Error(d.error.message);
     const reply=d.candidates?.[0]?.content?.parts?.[0]?.text||'응답 없음';
     _aiMsgs[_aiMsgs.length-1]={role:'ai',text:reply};
+    // 코치 로그 저장
+    try{
+      const log=JSON.parse(localStorage.getItem('hb_coach_log')||'[]');
+      log.push({id:Date.now(),ts:Date.now(),q,a:reply,metrics:_snapMetrics});
+      if(log.length>300)log.splice(0,log.length-300);
+      localStorage.setItem('hb_coach_log',JSON.stringify(log));
+    }catch(ex){}
   }catch(e){
     _aiMsgs[_aiMsgs.length-1]={role:'ai',text:'❌ '+e.message+'\n\nAPI Key와 모델을 확인해주세요. ⚙️ 설정에서 변경 가능합니다.'};
   }
@@ -3080,7 +3117,7 @@ function renderPersonalView(){
   if(!st){el.innerHTML='<div class="stat-card" style="margin-top:20px"><div class="stat-label">안내</div><div class="stat-value" style="font-size:1rem">개인매매 데이터 없음 (personalPnl 컬럼 확인)</div></div>';return;}
 
   const{active,wins,losses,wr,totalPnl,grossW,grossL,avgW,avgL,pf,avgD,ev,mthPnl,
-    KD,ds,ms,maxW,maxL,wStart,wEnd,lStart,lEnd,
+    KD,ds,ms,msByYM,maxW,maxL,wStart,wEnd,lStart,lEnd,
     latestCum,peakCum,peakDate,troughCum,troughDate,curDD,cumMddPct,
     bestMthKey,bestMthChange,worstMthKey,worstMthChange,mthCumChange}=st;
 
@@ -3146,16 +3183,17 @@ function renderPersonalView(){
     </tr>`;
   }).join('');
 
-  // ── Month rows table ──
+  // ── Month rows table (YYYY-MM 연도 포함, 시간순) ──
   const MONTHS_KR=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  const hkMonthRows=[1,2,3,4,5,6,7,8,9,10,11,12].map(i=>{
-    const s=ms[i];
-    if(!s.n)return`<tr style="opacity:.35"><td>${MONTHS_KR[i-1]}</td><td colspan="4" style="font-size:.75rem;color:var(--tx2)">데이터 없음</td></tr>`;
+  const hkMonthRows=Object.keys(msByYM).sort().map(ym=>{
+    const s=msByYM[ym];
+    const [yr,mo]=ym.split('-');
+    const label=`${yr.slice(2)}년 ${+mo}월`;
     const wr2=(s.win/s.n*100).toFixed(1);const wrN=+wr2;
     const avg2=(s.pnl/s.n).toFixed(2);const avgN=+avg2;
     const warn=s.n<5?'<span style="color:var(--tx2);font-size:.68rem"> ⚠️</span>':'';
     return`<tr>
-      <td style="font-weight:500">${MONTHS_KR[i-1]}</td>
+      <td style="font-weight:500">${label}</td>
       <td>${s.n}건${warn}</td>
       <td class="${wrN>=50?'pos':'neg'}">${wr2}%</td>
       <td class="${avgN>=0?'pos':'neg'}">${avgN>=0?'+':'-'}$${fmtN(Math.abs(avgN))}/일</td>
@@ -3166,13 +3204,13 @@ function renderPersonalView(){
 
   el.innerHTML=`
     <!-- 비교 섹션 -->
-    <div class="section-label" style="margin-bottom:10px">⚖️ 펀드 vs 개인매매 비교 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· 같은 기간 나란히 보기</span></div>
+    <div class="section-label" style="margin-bottom:10px">⚖️ 브리핑 vs 개인매매 비교 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· 같은 기간 나란히 보기</span></div>
     <div class="table-card" style="margin-bottom:24px">
       <div class="tbl-wrap"><table>
         <thead><tr>
           <th style="width:40%">항목</th>
-          <th style="text-align:right">📊 펀드 (profit)</th>
-          <th style="text-align:right">👤 개인 (personalPnl)</th>
+          <th style="text-align:right">📊 브리핑 (profit)</th>
+          <th style="text-align:right">👤 개인 (personalCumPnl delta)</th>
         </tr></thead>
         <tbody>
           ${cmpRow('거래일 수',`${fActive.length}일`,`${active.length}일`,'','')}
@@ -3244,6 +3282,80 @@ function renderPersonalView(){
     mkBar('chart-hk-mpnl',ML,hkMpnlArr, hkMpnlArr.map(v=>v>=0?'rgba(76,175,122,.75)':'rgba(207,102,121,.75)'));
     mkBar('chart-hk-mfreq',ML,hkMfreqArr,accent()+'b3');
   });
+}
+
+/* ── Coach Log ── */
+window.clearCoachLog=function(){
+  if(!confirm('코치 로그를 전부 삭제하시겠습니까?'))return;
+  localStorage.removeItem('hb_coach_log');
+  renderCoachView();
+};
+function renderCoachView(){
+  const el=document.getElementById('coach-content');
+  if(!el)return;
+  let log=[];
+  try{log=JSON.parse(localStorage.getItem('hb_coach_log')||'[]');}catch(e){}
+  if(!log.length){
+    el.innerHTML='<div class="stat-card" style="margin-top:8px"><div class="stat-label">안내</div><div class="stat-value" style="font-size:1rem">저장된 코치 답변이 없습니다</div><div class="stat-sub">AI 트레이딩 코치에 질문하면 답변이 여기에 자동 저장됩니다</div></div>';
+    return;
+  }
+  // ── 메트릭 트래킹 ──
+  const mSnaps=log.filter(e=>e.metrics);
+  const first=mSnaps[0]?.metrics;
+  const last=mSnaps[mSnaps.length-1]?.metrics;
+  const wrChg=first&&last?+(last.wr-first.wr).toFixed(1):null;
+  const cumChg=first&&last?+(last.cumP-first.cumP).toFixed(2):null;
+  const seedChg=first&&last?+(last.seed-first.seed).toFixed(0):null;
+  const hkChg=first&&last&&first.hkCum!=null&&last.hkCum!=null?+(last.hkCum-first.hkCum).toFixed(2):null;
+
+  const metricCard=(label,val,fmt)=>{
+    if(val===null)return'';
+    const pos=val>=0;
+    const disp=fmt==='$'?(pos?'+$':'-$')+fmtN(Math.abs(val)):(pos?'+':'')+val+(fmt||'');
+    return`<div class="stat-card ${pos?'c-green':'c-red'}">
+      <div class="stat-label">${label} 변화</div>
+      <div class="stat-value ${pos?'pos':'neg'}" style="font-size:1.3rem">${disp}</div>
+      <div class="stat-sub">${first?.date||'—'} → ${last?.date||'—'}</div>
+    </div>`;
+  };
+
+  // ── 세션 목록 ──
+  const sessions=[...log].reverse().map((e,i)=>{
+    const dt=e.metrics?.date||new Date(e.ts).toISOString().slice(0,10);
+    const qShort=e.q.length>80?e.q.slice(0,80)+'…':e.q;
+    const aHtml=e.a.replace(/</g,'&lt;').replace(/\n/g,'<br>');
+    const mid=`coach-${e.id}`;
+    const m=e.metrics;
+    const metaBadge=m?`<span style="font-size:.72rem;color:var(--tx2);margin-left:8px">승률 ${m.wr}%&nbsp;·&nbsp;누적 ${m.cumP>=0?'+':''}$${fmtN(Math.abs(m.cumP))}${m.hkCum!=null?'&nbsp;·&nbsp;개인누적 '+(m.hkCum>=0?'+':'')+'$'+fmtN(Math.abs(m.hkCum)):''}</span>`:'';
+    return`<div class="table-card" style="margin-bottom:14px">
+      <div class="table-card-hdr" style="cursor:pointer;user-select:none" onclick="document.getElementById('${mid}').style.display=document.getElementById('${mid}').style.display==='none'?'block':'none'">
+        <h3 style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+          <span style="color:var(--tx2);font-size:.75rem;font-weight:400;margin-right:4px">${dt}</span>
+          ${qShort}${metaBadge}
+        </h3>
+        <span style="font-size:.78rem;color:var(--tx2)">▾ 펼치기</span>
+      </div>
+      <div id="${mid}" style="display:none;padding:16px 20px">
+        <div style="font-size:.78rem;color:var(--tx2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">질문</div>
+        <div style="font-size:.86rem;color:var(--tx);background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px">${e.q.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+        <div style="font-size:.78rem;color:var(--tx2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">AI 코치 답변</div>
+        <div style="font-size:.86rem;color:var(--tx);line-height:1.75;white-space:pre-wrap">${aHtml}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div class="section-label" style="margin-bottom:10px">📊 상담 기간 성과 변화 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· 첫 상담 → 최근 상담 기준</span></div>
+    <div class="stat-grid" style="margin-bottom:28px">
+      ${metricCard('승률',wrChg,'%')}
+      ${metricCard('누적손익',cumChg,'$')}
+      ${metricCard('총시드',seedChg,'$')}
+      ${hkChg!==null?metricCard('개인누적',hkChg,'$'):''}
+      <div class="stat-card c-ac"><div class="stat-label">총 상담 횟수</div><div class="stat-value">${log.length}회</div><div class="stat-sub">${log[0]?.metrics?.date||'—'} ~ ${log[log.length-1]?.metrics?.date||'—'}</div></div>
+    </div>
+    <div class="section-label" style="margin-bottom:12px">💬 상담 기록 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· 최신순 · 제목 클릭으로 펼치기</span></div>
+    ${sessions}
+  `;
 }
 
 /* ── AI Analysis ── */
