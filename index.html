@@ -1026,50 +1026,40 @@ function getHkPersonalStats(jnlSorted){
 function buildHkDashSection(jnlSorted){
   const st=getHkPersonalStats(jnlSorted);
   if(!st)return'';
-  const{active,wins,losses,wr,totalPnl,grossW,grossL,avgW,avgL,pf,avgD,ev,mthPnl,KD,ds,maxW,maxL,wStart,wEnd,lStart,lEnd,
-    latestCum,peakCum,peakDate,troughCum,troughDate,curDD,cumMddPct,bestMthKey,bestMthChange,worstMthKey,worstMthChange,mthCumChange}=st;
+  const{active,wins,losses,wr,grossW,grossL,avgW,avgL,pf,avgD,ev,mthPnl,KD,ds,maxW,maxL,wStart,wEnd,lStart,lEnd,
+    latestCum,peakCum,peakDate,curDD,cumMddPct}=st;
   const dayBars=KD.filter(d=>ds[d].n>0).map(d=>{
     const wr2=Math.round(ds[d].win/ds[d].n*100);
     const avg2=+(ds[d].pnl/ds[d].n).toFixed(1);
-    return'<div style="background:var(--bg3);border-radius:8px;padding:12px 10px;text-align:center;min-width:58px;flex:1">'
-      +'<div style="font-size:.80rem;color:var(--tx2);margin-bottom:4px;font-weight:500">'+d+'</div>'
-      +'<div style="font-size:1.15rem;font-weight:700;line-height:1.1" class="'+(wr2>=50?'pos':'neg')+'">'+wr2+'%</div>'
-      +'<div style="font-size:.74rem;color:var(--tx2);margin-top:4px">'+ds[d].n+'일</div>'
-      +'<div style="font-size:.78rem;font-weight:500;margin-top:2px" class="'+(avg2>=0?'pos':'neg')+'">'+(avg2>=0?'+':'-')+'$'+fmtN(Math.abs(avg2))+'</div>'
+    return'<div style="background:var(--bg3);border-radius:8px;padding:10px 8px;text-align:center;min-width:54px;flex:1">'
+      +'<div style="font-size:.78rem;color:var(--tx2);margin-bottom:3px;font-weight:500">'+d+'</div>'
+      +'<div style="font-size:1.05rem;font-weight:700;line-height:1.1" class="'+(wr2>=50?'pos':'neg')+'">'+wr2+'%</div>'
+      +'<div style="font-size:.70rem;color:var(--tx2);margin-top:3px">'+ds[d].n+'일</div>'
+      +'<div style="font-size:.75rem;font-weight:500;margin-top:2px" class="'+(avg2>=0?'pos':'neg')+'">'+(avg2>=0?'+':'-')+'$'+fmtN(Math.abs(avg2))+'</div>'
       +'</div>';
   }).join('');
-  const sep='<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--bd)">';
-  // ── Section A: personalPnl ──
-  const secA='<div class="section-label" style="margin-top:24px;margin-bottom:10px;border-top:1px solid var(--bd);padding-top:16px">'
-    +'👤 개인손익 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">personalPnl 컬럼 기반 · 일별 손익금 합산</span></div>'
+  return'<div class="section-label" style="margin-top:24px;margin-bottom:10px;border-top:1px solid var(--bd);padding-top:16px">'
+    +'👤 김한결 개인매매 분석 <span style="font-size:.72rem;color:var(--tx2);font-weight:400">· 매매일지 personalPnl · personalCumPnl 컬럼 기반</span></div>'
     +'<div class="stat-grid">'
-    +'<div class="stat-card '+(totalPnl>=0?'c-green':'c-red')+'"><div class="stat-label">손익 총합 (Σ)</div><div class="stat-value '+(totalPnl>=0?'pos':'neg')+'">'+(totalPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(totalPnl).toFixed(2)))+'</div><div class="stat-sub">시즈널리티 누적기여 합산과 동일</div></div>'
-    +'<div class="stat-card '+(mthPnl>=0?'c-green':'c-red')+'"><div class="stat-label">이번달 개인손익</div><div class="stat-value '+(mthPnl>=0?'pos':'neg')+'">'+(mthPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(mthPnl).toFixed(2)))+'</div></div>'
-    +'<div class="stat-card '+(+wr>=50?'c-green':'c-red')+'"><div class="stat-label">일간 승률</div><div class="stat-value">'+wr+'%</div><div class="stat-sub">'+wins.length+'수익 '+losses.length+'손실 ('+active.length+'일)</div></div>'
-    +'<div class="stat-card '+(+avgD>=0?'c-green':'c-red')+'"><div class="stat-label">일평균 손익</div><div class="stat-value '+(+avgD>=0?'pos':'neg')+'">'+(+avgD>=0?'+':'-')+'$'+fmtN(Math.abs(+avgD))+'</div></div>'
+    // 누적손익 (personalCumPnl 최신값)
+    +'<div class="stat-card c-ac"><div class="stat-label">개인 누적손익</div><div class="stat-value '+(latestCum>=0?'pos':'neg')+'">'+(latestCum>=0?'+':'-')+'$'+fmtN(Math.abs(+(latestCum).toFixed(2)))+'</div><div class="stat-sub">personalCumPnl 최신값</div></div>'
+    // 이번달 (personalPnl 합산)
+    +'<div class="stat-card '+(mthPnl>=0?'c-green':'c-red')+'"><div class="stat-label">이번달 개인손익</div><div class="stat-value '+(mthPnl>=0?'pos':'neg')+'">'+(mthPnl>=0?'+':'-')+'$'+fmtN(Math.abs(+(mthPnl).toFixed(2)))+'</div><div class="stat-sub">personalPnl 합산</div></div>'
+    // 일간 승률
+    +'<div class="stat-card '+(+wr>=50?'c-green':'c-red')+'"><div class="stat-label">일간 승률</div><div class="stat-value">'+wr+'%</div><div class="stat-sub">'+wins.length+'수익 '+losses.length+'손실 · '+active.length+'일</div></div>'
+    // 일평균 손익
+    +'<div class="stat-card '+(+avgD>=0?'c-green':'c-red')+'"><div class="stat-label">일평균 손익</div><div class="stat-value '+(+avgD>=0?'pos':'neg')+'">'+(+avgD>=0?'+':'-')+'$'+fmtN(Math.abs(+avgD))+'</div><div class="stat-sub">수익 $'+fmtN(avgW)+' / 손실 $'+fmtN(avgL)+'</div></div>'
+    // EV
     +'<div class="stat-card '+(ev>=0?'c-green':'c-red')+'"><div class="stat-label">기대값 EV/일</div><div class="stat-value '+(ev>=0?'pos':'neg')+'">'+(ev>=0?'+':'-')+'$'+fmtN(Math.abs(ev))+'</div><div class="stat-sub">승률×평균수익 − 패률×평균손실</div></div>'
-    +'<div class="stat-card c-green"><div class="stat-label">최장 연승</div><div class="stat-value">'+maxW+'일</div>'+(wStart?'<div class="stat-sub">'+wStart+'~'+wEnd.slice(5)+'</div>':'')+'</div>'
-    +'<div class="stat-card c-red"><div class="stat-label">최장 연패</div><div class="stat-value">'+maxL+'일</div>'+(lStart?'<div class="stat-sub">'+lStart+'~'+lEnd.slice(5)+'</div>':'')+'</div>'
-    +'<div class="stat-card '+(+pf>=1||pf==='∞'?'c-green':'c-red')+'"><div class="stat-label">P-Factor</div><div class="stat-value">'+pf+'</div><div class="stat-sub">총수익 $'+fmtN(+(grossW).toFixed(2))+' / 총손실 $'+fmtN(+(grossL).toFixed(2))+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label">평균 수익일 / 손실일</div><div class="stat-value"><span class="pos">+$'+fmtN(avgW)+'</span> <span style="color:var(--tx2);font-size:.75rem">/</span> <span class="neg">-$'+fmtN(avgL)+'</span></div></div>'
+    // P-Factor
+    +'<div class="stat-card '+(+pf>=1||pf==='∞'?'c-green':'c-red')+'"><div class="stat-label">P-Factor</div><div class="stat-value">'+pf+'</div><div class="stat-sub">총수익 $'+fmtN(+(grossW).toFixed(0))+' / 총손실 $'+fmtN(+(grossL).toFixed(0))+'</div></div>'
+    // 연승 / 연패
+    +'<div class="stat-card"><div class="stat-label">연승 / 연패</div><div class="stat-value" style="font-size:1.2rem"><span class="pos">'+maxW+'일</span><span style="color:var(--tx2);font-size:.75rem;margin:0 4px">/</span><span class="neg">'+maxL+'일</span></div><div class="stat-sub">'+(wStart?'연승 '+wStart.slice(5)+'~'+wEnd.slice(5):'—')+'</div></div>'
+    // 누적 고점 / 낙폭
+    +(peakCum>0||curDD>0?'<div class="stat-card '+(curDD>0?'c-red':'')+'"><div class="stat-label">누적 고점 / 현재 낙폭</div><div class="stat-value" style="font-size:1.05rem"><span class="pos">$'+fmtN(+(peakCum).toFixed(0))+'</span>'+(curDD>0?'<span style="color:var(--tx2);font-size:.75rem;margin:0 4px">/</span><span class="neg">-$'+fmtN(curDD)+'</span>':'')+'</div><div class="stat-sub">'+(peakDate?'고점 '+peakDate:'')+(cumMddPct?' · MDD '+cumMddPct+'%':'')+'</div></div>':'')
     +'</div>'
-    +'<div class="section-label" style="margin-top:14px;margin-bottom:8px">📅 요일별 패턴 (personalPnl)</div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+dayBars+'</div>';
-  // ── Section B: personalCumPnl ──
-  const secB=sep
-    +'<div class="section-label" style="margin-bottom:10px">'
-    +'📈 개인누적 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">personalCumPnl 컬럼 기반 · 누적 잔고 추적</span></div>'
-    +'<div class="stat-grid">'
-    +'<div class="stat-card c-ac"><div class="stat-label">현재 개인 누적손익</div><div class="stat-value '+(latestCum>=0?'pos':'neg')+'">'+(latestCum>=0?'+':'-')+'$'+fmtN(Math.abs(+(latestCum).toFixed(2)))+'</div><div class="stat-sub">최신 personalCumPnl 값</div></div>'
-    +'<div class="stat-card '+(mthCumChange>=0?'c-green':'c-red')+'"><div class="stat-label">이번달 누적 변화</div><div class="stat-value '+(mthCumChange>=0?'pos':'neg')+'">'+(mthCumChange>=0?'+':'-')+'$'+fmtN(Math.abs(mthCumChange))+'</div><div class="stat-sub">전월말 대비</div></div>'
-    +(peakCum>0?'<div class="stat-card c-green"><div class="stat-label">누적 고점</div><div class="stat-value pos">+$'+fmtN(+(peakCum).toFixed(2))+'</div>'+(peakDate?'<div class="stat-sub">'+peakDate+'</div>':'')+'</div>':'')
-    +'<div class="stat-card '+(troughCum<0?'c-red':'')+'"><div class="stat-label">누적 저점</div><div class="stat-value '+(troughCum<0?'neg':'pos')+'">'+(troughCum>=0?'+':'-')+'$'+fmtN(Math.abs(+(troughCum).toFixed(2)))+'</div>'+(troughDate?'<div class="stat-sub">'+troughDate+'</div>':'')+'</div>'
-    +(curDD>0?'<div class="stat-card c-red"><div class="stat-label">고점 대비 낙폭</div><div class="stat-value neg">-$'+fmtN(curDD)+'</div><div class="stat-sub">MDD '+(cumMddPct?cumMddPct+'%':'—')+'</div></div>':'')
-    +(bestMthKey?'<div class="stat-card c-green"><div class="stat-label">최고 월 (누적변화)</div><div class="stat-value pos">+$'+fmtN(+(bestMthChange).toFixed(2))+'</div><div class="stat-sub">'+bestMthKey+'</div></div>':'')
-    +(worstMthKey?'<div class="stat-card c-red"><div class="stat-label">최저 월 (누적변화)</div><div class="stat-value neg">-$'+fmtN(Math.abs(+(worstMthChange).toFixed(2)))+'</div><div class="stat-sub">'+worstMthKey+'</div></div>':'')
-    +'</div>'
-    +'</div>';
-  return secA+secB;
+    +'<div style="margin-top:12px;margin-bottom:6px;font-size:.78rem;color:var(--tx2);font-weight:500;letter-spacing:.05em;text-transform:uppercase">📅 요일별 손익 패턴</div>'
+    +'<div style="display:flex;gap:5px;flex-wrap:wrap">'+dayBars+'</div>';
 }
 
 /* ── Dashboard ── */
