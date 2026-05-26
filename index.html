@@ -1652,9 +1652,37 @@ function jnlFmt(val,fmt){
   }
 }
 
-function jnlEvalFormula(s){
+function jnlEvalFormula(s, entry){
   if(typeof s!=='string'||!s.startsWith('='))return s;
-  try{const expr=s.slice(1).replace(/[^0-9+\-*/.(), %]/g,'');return Function('"use strict";return('+expr+');')();}
+  let expr=s.slice(1);
+  if(entry){
+    // 긴 이름 먼저 치환 (부분 매칭 방지)
+    const vars={
+      '업비트시작': +entry.exchanges?.upbit?.open||0,
+      '업비트마감': +entry.exchanges?.upbit?.close||0,
+      '빗썸시작':   +entry.exchanges?.bithumb?.open||0,
+      '빗썸마감':   +entry.exchanges?.bithumb?.close||0,
+      '퓨쳐스시작': +entry.exchanges?.binance?.open||0,
+      '퓨쳐스마감': +entry.exchanges?.binance?.close||0,
+      '토스시작':   +entry.exchanges?.toss?.open||0,
+      '토스마감':   +entry.exchanges?.toss?.close||0,
+      '시드시작':   +entry.seedStart||0,
+      '테더':       +entry.tether||0,
+      '총시드':     +entry.totalSeed||0,
+      '원화시드':   (+entry.totalSeed&&+entry.tether)?Math.round(+entry.totalSeed*+entry.tether):0,
+      '출입금':     +entry.cashFlow||0,
+      '수익금':     +entry.profit||0,
+      '수익률':     +entry.rate||0,
+      '개인손익':   +entry.personalPnl||0,
+      '개인누적':   +entry.personalCumPnl||0,
+      '코인':       +entry.coinPnl||0,
+      '주식':       +entry.stockPnl||0,
+    };
+    Object.keys(vars).sort((a,b)=>b.length-a.length).forEach(k=>{
+      expr=expr.split(k).join(String(vars[k]));
+    });
+  }
+  try{const safe=expr.replace(/[^0-9+\-*/.(), %]/g,'');return Function('"use strict";return('+safe+');')();}
   catch{return s;}
 }
 
@@ -1843,9 +1871,9 @@ window.jnlEdit=function(span){
   }else{
     inp=document.createElement('input');
     inp.className='jnl-cell-input';
-    inp.type=isDate?'date':isTxt?'text':'number';
+    inp.type=isDate?'date':'text';
+    inp.inputMode=(!isDate&&!isTxt)?'decimal':'';
     inp.value=curRaw==='—'?'':curRaw;
-    if(!isDate&&!isTxt)inp.step='any';
   }
   // Overlay: keep span visible, input positioned absolute on top → no layout jump
   span.dataset.editing='1';
@@ -1855,7 +1883,7 @@ window.jnlEdit=function(span){
 
   async function commit(){
     let newRaw=inp.value.trim();
-    if(!isDropdown&&newRaw.startsWith('='))newRaw=String(jnlEvalFormula(newRaw));
+    if(!isDropdown&&newRaw.startsWith('='))newRaw=String(jnlEvalFormula(newRaw,entry));
     inp.remove();delete span.dataset.editing;
     if(newRaw===curRaw)return;
     const entry=journal.find(e=>e.id===id);if(!entry)return;
