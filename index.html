@@ -1618,7 +1618,7 @@ const JNL_COLS=[
   {key:'coinPnl',       label:'코인',        fmt:'pnl',
     get:e=>e.coinPnl,
     upd:v=>({coinPnl:+v||0})},
-  {key:'stockPnl',      label:'주식',        fmt:'pnl',
+  {key:'stockPnl',      label:'주식(₩)',     fmt:'krwpnl',
     get:e=>e.stockPnl,
     upd:v=>({stockPnl:+v||0})},
   {key:'personalCumPnl',label:'개인누적',    fmt:'pnl', autoFill:true,
@@ -1641,6 +1641,7 @@ function jnlFmt(val,fmt){
     case'usd': return'$'+fmtN(+val);
     case'rate':{const n=+val;return n?n.toLocaleString('ko-KR'):'<span style="color:var(--tx2);opacity:.35">—</span>';}
     case'pnl':{const n=+val;if(!n)return'<span style="color:var(--tx2);opacity:.35">—</span>';return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':'-'}$${fmtN(Math.abs(n))}</span>`;}
+    case'krwpnl':{const n=+val;if(!n)return'<span style="color:var(--tx2);opacity:.35">—</span>';return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':'-'}${Math.abs(n).toLocaleString('ko-KR')}</span>`;}
     case'pct':{const n=+val;return`<span class="${n>=0?'pos':'neg'}">${n>=0?'+':''}${n.toFixed(2)}%</span>`;}
     case'txt': return String(val).replace(/</g,'&lt;').replace(/>/g,'&gt;');
     case'stop':{const s=String(val);if(!s)return'<span style="color:var(--tx2);opacity:.35">—</span>';
@@ -1928,10 +1929,12 @@ window.jnlEdit=function(span){
           }
         }
       }
-      // ── Auto-compute personalPnl = coinPnl + stockPnl ──
+      // ── Auto-compute personalPnl = coinPnl(USD) + stockPnl(KRW)/tether ──
       if((key==='coinPnl'||key==='stockPnl')&&!isDate){
         const cp=+entry.coinPnl||0,sp2=+entry.stockPnl||0;
-        const _newPP=+(cp+sp2).toFixed(4);
+        const tt=+entry.tether||0;
+        const stockUsd=tt>0?+(sp2/tt).toFixed(4):0;
+        const _newPP=+(cp+stockUsd).toFixed(4);
         if(Math.abs(_newPP-(+entry.personalPnl||0))>0.001){
           entry.personalPnl=_newPP;
           await db.collection('trading_journal').doc(id).update({personalPnl:_newPP});
