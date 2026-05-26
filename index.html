@@ -1575,6 +1575,13 @@ const JNL_COLS=[
   {key:'binance',       label:'퓨쳐스마감',  fmt:'usd',
     get:e=>e.exchanges?.binance?.close,
     upd:v=>({'exchanges.binance.close':+v||0})},
+  {key:'tossOpen',      label:'토스시작',    fmt:'krw', autoFill:true,
+    autoFillDesc:'전일 토스 마감값 자동이월',
+    get:e=>e.exchanges?.toss?.open,
+    upd:v=>({'exchanges.toss.open':+v||0})},
+  {key:'toss',          label:'토스마감',    fmt:'krw',
+    get:e=>e.exchanges?.toss?.close,
+    upd:v=>({'exchanges.toss.close':+v||0})},
   // Seed (Col H, I, M) — seedStart & tether are auto-filled
   {key:'seedStart',     label:'시드시작($)', fmt:'usd', autoFill:true,
     autoFillDesc:'전일 총시드 자동이월',
@@ -1585,7 +1592,7 @@ const JNL_COLS=[
     get:e=>e.tether,
     upd:v=>({tether:+v||0})},
   {key:'totalSeed',     label:'총시드($)',   fmt:'usd', autoFill:true,
-    autoFillDesc:'(업비트마감+빗썸마감)/테더+퓨쳐스마감 자동계산',
+    autoFillDesc:'(업비트마감+빗썸마감+토스마감)/테더+퓨쳐스마감 자동계산',
     get:e=>e.totalSeed,
     upd:v=>({totalSeed:+v||0})},
   {key:'krwSeed',       label:'원화시드(₩)', fmt:'krw', readonly:true,
@@ -1604,9 +1611,16 @@ const JNL_COLS=[
     autoFillDesc:'수익금 ÷ 시드시작 × 100 자동계산',
     get:e=>e.rate,
     upd:v=>({rate:+v||0})},
-  {key:'personalPnl',   label:'개인손익',    fmt:'pnl',
+  {key:'personalPnl',   label:'개인손익',    fmt:'pnl', autoFill:true,
+    autoFillDesc:'코인+주식 자동계산 (직접 입력도 가능)',
     get:e=>e.personalPnl,
     upd:v=>({personalPnl:+v||0})},
+  {key:'coinPnl',       label:'코인',        fmt:'pnl',
+    get:e=>e.coinPnl,
+    upd:v=>({coinPnl:+v||0})},
+  {key:'stockPnl',      label:'주식',        fmt:'pnl',
+    get:e=>e.stockPnl,
+    upd:v=>({stockPnl:+v||0})},
   {key:'personalCumPnl',label:'개인누적',    fmt:'pnl', autoFill:true,
     autoFillDesc:'전일 개인누적 + 오늘 개인손익 자동계산',
     get:e=>e.personalCumPnl,
@@ -1863,13 +1877,14 @@ window.jnlEdit=function(span){
       const _jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
       const _idx=_jnlSorted.findIndex(e=>e.id===id);
       // ── Auto-compute totalSeed = (upbit.close + bithumb.close) / tether + binance.close ──
-      const _tsDeps=['upbit','bithumb','binance','tether'];
+      const _tsDeps=['upbit','bithumb','binance','toss','tether'];
       let _newTS=null;
       if(_tsDeps.includes(key)&&!isDate){
         const ub=+entry.exchanges?.upbit?.close||0,bh=+entry.exchanges?.bithumb?.close||0;
-        const bn=+entry.exchanges?.binance?.close||0,tt=+entry.tether||0;
-        if(tt>0&&(ub||bh||bn)){
-          _newTS=+((ub+bh)/tt+bn).toFixed(4);
+        const bn=+entry.exchanges?.binance?.close||0,to=+entry.exchanges?.toss?.close||0;
+        const tt=+entry.tether||0;
+        if(tt>0&&(ub||bh||bn||to)){
+          _newTS=+((ub+bh+to)/tt+bn).toFixed(4);
           if(Math.abs(_newTS-(+entry.totalSeed||0))>0.001){
             entry.totalSeed=_newTS;
             await db.collection('trading_journal').doc(id).update({totalSeed:_newTS});
@@ -1913,8 +1928,19 @@ window.jnlEdit=function(span){
           }
         }
       }
+      // ── Auto-compute personalPnl = coinPnl + stockPnl ──
+      if((key==='coinPnl'||key==='stockPnl')&&!isDate){
+        const cp=+entry.coinPnl||0,sp2=+entry.stockPnl||0;
+        const _newPP=+(cp+sp2).toFixed(4);
+        if(Math.abs(_newPP-(+entry.personalPnl||0))>0.001){
+          entry.personalPnl=_newPP;
+          await db.collection('trading_journal').doc(id).update({personalPnl:_newPP});
+          const ppSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="personalPnl"]');
+          if(ppSpan){ppSpan.innerHTML=jnlFmt(_newPP,'pnl');ppSpan.dataset.val=String(_newPP);}
+        }
+      }
       // ── Auto-compute personalCumPnl = prev.personalCumPnl + personalPnl ──
-      if(key==='personalPnl'&&!isDate){
+      if((key==='personalPnl'||key==='coinPnl'||key==='stockPnl')&&!isDate){
         const prevE=_idx>0?_jnlSorted[_idx-1]:null;
         const prevCum=prevE?+prevE.personalCumPnl||0:0;
         const _newPC=+(prevCum+(+entry.personalPnl||0)).toFixed(4);
@@ -1933,8 +1959,9 @@ window.jnlEdit=function(span){
         if(key==='upbit'){nextUpdate['exchanges.upbit.open']=+newRaw||0;nextDomUpdates.push({key:'upbitOpen',val:+newRaw||0});}
         else if(key==='bithumb'){nextUpdate['exchanges.bithumb.open']=+newRaw||0;nextDomUpdates.push({key:'bithumbOpen',val:+newRaw||0});}
         else if(key==='binance'){nextUpdate['exchanges.binance.open']=+newRaw||0;nextDomUpdates.push({key:'binanceOpen',val:+newRaw||0});}
+        else if(key==='toss'){nextUpdate['exchanges.toss.open']=+newRaw||0;nextDomUpdates.push({key:'tossOpen',val:+newRaw||0});}
         // personalCumPnl → next personalCumPnl
-        const _pcToCarry=key==='personalCumPnl'?+newRaw||0:(key==='personalPnl'?+entry.personalCumPnl||0:null);
+        const _pcToCarry=key==='personalCumPnl'?+newRaw||0:(['personalPnl','coinPnl','stockPnl'].includes(key)?+entry.personalCumPnl||0:null);
         if(_pcToCarry!==null){
           const nextCumPc=+(_pcToCarry+(+_nextE.personalPnl||0)).toFixed(4);
           if(Math.abs(nextCumPc-(+_nextE.personalCumPnl||0))>0.001){
@@ -2069,10 +2096,11 @@ window.addJnlRow=async function(){
       upbit:  {open:prev?.exchanges?.upbit?.close  ||0, close:0},
       bithumb:{open:prev?.exchanges?.bithumb?.close||0, close:0},
       binance:{open:prev?.exchanges?.binance?.close||0, close:0},
+      toss:   {open:prev?.exchanges?.toss?.close   ||0, close:0},
     },
     seedStart:prev?.totalSeed||0,
     totalSeed:0,profit:0,rate:0,tether,
-    cashFlow:0,personalPnl:0,personalCumPnl:prev?.personalCumPnl||0,stopAlert:'',memo:'',
+    cashFlow:0,personalPnl:0,coinPnl:0,stockPnl:0,personalCumPnl:prev?.personalCumPnl||0,stopAlert:'',memo:'',
     userId:getCurUid(),createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   try{
@@ -2342,6 +2370,8 @@ window.exportJournalXLSX=function(){
       '빗썸마감':+e.exchanges?.bithumb?.close||'',
       '퓨쳐스시작':+e.exchanges?.binance?.open||'',
       '퓨쳐스마감':+e.exchanges?.binance?.close||'',
+      '토스시작':+e.exchanges?.toss?.open||'',
+      '토스마감':+e.exchanges?.toss?.close||'',
       '시드시작($)':+e.seedStart||'',
       '테더(₩/$)':t||'',
       '총시드($)':s||'',
@@ -2350,6 +2380,8 @@ window.exportJournalXLSX=function(){
       '수익금($)':+e.profit||'',
       '수익률(%)':+e.rate||'',
       '개인손익':+e.personalPnl||'',
+      '코인':+e.coinPnl||'',
+      '주식':+e.stockPnl||'',
       '개인누적':+e.personalCumPnl||'',
       '강제종료':e.stopAlert||'',
       '비고/사유':e.memo||'',
