@@ -237,6 +237,31 @@
     .jnl-msum-lbl{font-size:.65rem;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em}
     .jnl-msum-val{font-size:.88rem;font-weight:700}
     .jnl-msum-sub{font-size:.65rem;color:var(--tx2)}
+    /* ── Journal Column Config Modal ── */
+    #jnl-cfg-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:center;justify-content:center}
+    #jnl-cfg-modal .cfg-box{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;width:min(540px,96vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+    #jnl-cfg-modal .cfg-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd);flex-shrink:0}
+    #jnl-cfg-modal .cfg-hdr h3{font-size:.95rem;font-weight:600;color:var(--tx)}
+    #jnl-cfg-modal .cfg-body{overflow-y:auto;padding:16px 18px;flex:1}
+    #jnl-cfg-modal .cfg-ftr{padding:12px 18px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+    .cfg-sec-title{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx2);margin:0 0 8px;font-weight:600}
+    .cfg-exch-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;margin-bottom:5px}
+    .cfg-exch-row .drag-handle{color:var(--tx2);cursor:grab;font-size:.9rem;opacity:.5;padding:0 2px;user-select:none}
+    .cfg-exch-row .drag-handle:active{cursor:grabbing}
+    .cfg-exch-name{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:4px;color:var(--tx);padding:4px 8px;font-size:.83rem;font-family:inherit}
+    .cfg-exch-name:focus{border-color:var(--ac);outline:none}
+    .cfg-cur-toggle{display:flex;border:1px solid var(--bd);border-radius:4px;overflow:hidden}
+    .cfg-cur-toggle button{padding:3px 10px;font-size:.75rem;border:none;cursor:pointer;background:transparent;color:var(--tx2)}
+    .cfg-cur-toggle button.active{background:var(--ac);color:#000;font-weight:600}
+    .cfg-seed-chk{display:flex;align-items:center;gap:4px;font-size:.76rem;color:var(--tx2);white-space:nowrap;cursor:pointer}
+    .cfg-seed-chk input{accent-color:var(--ac)}
+    .cfg-del-btn{background:none;border:none;color:var(--tx2);cursor:pointer;font-size:.8rem;padding:2px 4px;opacity:.5}
+    .cfg-del-btn:hover{color:var(--red);opacity:1}
+    .cfg-sys-row{display:flex;align-items:center;gap:8px;padding:5px 0}
+    .cfg-sys-row input[type=checkbox]{accent-color:var(--ac);cursor:pointer}
+    .cfg-sys-label{flex:1;background:transparent;border:none;border-bottom:1px solid transparent;color:var(--tx);padding:2px 4px;font-size:.83rem;font-family:inherit;cursor:text}
+    .cfg-sys-label:focus{border-bottom-color:var(--ac);outline:none;background:var(--bg3)}
+    .cfg-sys-badge{font-size:.65rem;color:var(--ac);opacity:.7;white-space:nowrap}
     .badge.open-status{background:var(--ac-dim);color:var(--ac-l)}
     .tr-main-row{cursor:pointer}
     .tr-detail-row td{padding:0!important;border-bottom:1px solid var(--bd)}
@@ -515,7 +540,8 @@
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span id="jnl-count-badge" style="font-size:.78rem;color:var(--tx2)"></span>
-          <button class="btn btn-secondary btn-sm" onclick="addJnlCol()">＋ 열 추가</button>
+          <button id="jnl-cfg-btn" class="btn btn-secondary btn-sm" onclick="openJnlColCfg()" style="display:none">⚙ 열 구성</button>
+          <button id="jnl-addcol-btn" class="btn btn-secondary btn-sm" onclick="addJnlCol()">＋ 열 추가</button>
           <button class="btn btn-secondary btn-sm" onclick="exportJournalXLSX()">📊 엑셀 내보내기</button>
           <button class="btn btn-secondary btn-sm" onclick="openImportModal('journal')">📥 가져오기</button>
           <button class="btn btn-primary btn-sm" onclick="addJnlRow()">+ 행 추가</button>
@@ -550,6 +576,21 @@
         </div>
       </div>
     </section>
+
+    <!-- Journal Column Config Modal -->
+    <div id="jnl-cfg-modal" style="display:none" onclick="if(event.target===this)closeJnlColCfg()">
+      <div class="cfg-box">
+        <div class="cfg-hdr">
+          <h3>⚙ 열 구성</h3>
+          <button class="btn btn-secondary btn-sm" onclick="closeJnlColCfg()">✕</button>
+        </div>
+        <div class="cfg-body" id="jnl-cfg-body"></div>
+        <div class="cfg-ftr">
+          <button class="btn btn-secondary" onclick="closeJnlColCfg()">취소</button>
+          <button class="btn btn-primary" onclick="applyJnlColCfg()">저장</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Seasonality -->
     <section id="view-seasonality" class="view">
@@ -1552,6 +1593,79 @@ let jnlSortAsc=false;
 function getCustomCols(){try{return JSON.parse(localStorage.getItem('hb_jnl_custom_cols_'+getCurUid()))||[];}catch{return[];}}
 function saveCustomCols(c){localStorage.setItem('hb_jnl_custom_cols_'+getCurUid(),JSON.stringify(c));}
 
+/* ── Per-user Journal Column Schema (non-hk only) ── */
+const _SYS_COL_DEFS=[
+  {id:'seedStart', label:'시드시작($)', fmt:'usd', autoFill:true, autoFillDesc:'전일 총시드 자동이월', get:e=>e.seedStart, upd:v=>({seedStart:+v||0})},
+  {id:'tether',    label:'테더(₩/$)',  fmt:'rate',autoFill:true, autoFillDesc:'USD/KRW 환율 자동조회', get:e=>e.tether, upd:v=>({tether:+v||0})},
+  {id:'totalSeed', label:'총시드($)',  fmt:'usd', autoFill:true, autoFillDesc:'(KRW합계)/테더+USD합계 자동계산', get:e=>e.totalSeed, upd:v=>({totalSeed:+v||0})},
+  {id:'krwSeed',   label:'원화시드(₩)',fmt:'krw', readonly:true, autoFillDesc:'총시드×테더 자동계산(읽기전용)', computed:e=>{const s=+e.totalSeed||0,t=+e.tether||0;return s&&t?Math.round(s*t):null;}},
+  {id:'cashFlow',  label:'출입금($)',  fmt:'pnl', get:e=>e.cashFlow||0, upd:v=>({cashFlow:+v||0})},
+  {id:'profit',    label:'수익금($)',  fmt:'pnl', autoFill:true, autoFillDesc:'총시드+출입금-시드시작 자동계산', get:e=>e.profit, upd:v=>({profit:+v||0})},
+  {id:'rate',      label:'수익률',    fmt:'pct', autoFill:true, autoFillDesc:'수익금÷시드시작×100 자동계산', get:e=>e.rate, upd:v=>({rate:+v||0})},
+  {id:'personalPnl',label:'개인손익', fmt:'pnl', autoFill:true, autoFillDesc:'코인+주식 자동계산', get:e=>e.personalPnl, upd:v=>({personalPnl:+v||0})},
+  {id:'coinPnl',   label:'코인',      fmt:'pnl', get:e=>e.coinPnl, upd:v=>({coinPnl:+v||0})},
+  {id:'stockPnl',  label:'주식(₩)',   fmt:'krwpnl', get:e=>e.stockPnl, upd:v=>({stockPnl:+v||0})},
+  {id:'personalCumPnl',label:'개인누적',fmt:'pnl',autoFill:true,autoFillDesc:'전일 개인누적+오늘 개인손익', get:e=>e.personalCumPnl, upd:v=>({personalCumPnl:+v||0})},
+  {id:'stopAlert', label:'강제종료',  fmt:'stop',dropdown:['','▲ WARNING','● DAY STOP','■ STOP+REST'], get:e=>e.stopAlert, upd:v=>({stopAlert:v})},
+  {id:'memo',      label:'비고/사유', fmt:'txt', get:e=>e.memo, upd:v=>({memo:v})},
+];
+const DEF_JNL_SCHEMA={
+  exchanges:[
+    {id:'upbit',  label:'업비트',  currency:'krw', inSeed:true},
+    {id:'bithumb',label:'빗썸',    currency:'krw', inSeed:true},
+    {id:'binance',label:'퓨쳐스',  currency:'usd', inSeed:true},
+    {id:'toss',   label:'토스',    currency:'krw', inSeed:true},
+  ],
+  systemCols:{
+    seedStart:{show:true}, tether:{show:true}, totalSeed:{show:true},
+    krwSeed:{show:false}, cashFlow:{show:true}, profit:{show:true},
+    rate:{show:true}, personalPnl:{show:false}, coinPnl:{show:false},
+    stockPnl:{show:false}, personalCumPnl:{show:false},
+    stopAlert:{show:false}, memo:{show:true},
+  }
+};
+
+function getJnlSchema(){
+  if(getCurUid()==='hk')return null;
+  try{
+    const s=localStorage.getItem('hb_jnl_schema_'+getCurUid());
+    if(s){
+      const p=JSON.parse(s);
+      const sys={};
+      _SYS_COL_DEFS.forEach(d=>{
+        sys[d.id]={show:DEF_JNL_SCHEMA.systemCols[d.id]?.show??false, label:d.label, ...(p.systemCols?.[d.id]||{})};
+      });
+      return{...DEF_JNL_SCHEMA,...p,systemCols:sys};
+    }
+  }catch{}
+  const schema=JSON.parse(JSON.stringify(DEF_JNL_SCHEMA));
+  _SYS_COL_DEFS.forEach(d=>{if(!schema.systemCols[d.id])schema.systemCols[d.id]={show:false};});
+  _SYS_COL_DEFS.forEach(d=>{schema.systemCols[d.id].label=schema.systemCols[d.id].label||d.label;});
+  return schema;
+}
+function saveJnlSchema(s){localStorage.setItem('hb_jnl_schema_'+getCurUid(),JSON.stringify(s));}
+
+function buildDynamicCols(schema){
+  const cols=[];
+  schema.exchanges.forEach(exch=>{
+    const fmt=exch.currency==='krw'?'krw':'usd';
+    cols.push({key:exch.id+'Open', label:exch.label+'시작', fmt, autoFill:true,
+      autoFillDesc:`전일 ${exch.label} 마감값 자동이월`,
+      get:e=>e.exchanges?.[exch.id]?.open,
+      upd:v=>({[`exchanges.${exch.id}.open`]:+v||0})});
+    cols.push({key:exch.id, label:exch.label+'마감', fmt,
+      get:e=>e.exchanges?.[exch.id]?.close,
+      upd:v=>({[`exchanges.${exch.id}.close`]:+v||0}),
+      _exchId:exch.id, _exchCurrency:exch.currency, _inSeed:exch.inSeed});
+  });
+  _SYS_COL_DEFS.forEach(def=>{
+    const cfg=schema.systemCols[def.id];
+    if(!cfg?.show)return;
+    cols.push({...def, key:def.id, label:cfg.label||def.label});
+  });
+  return cols;
+}
+
 const JNL_COLS=[
   // Exchange open → close (Col B/C, D/E, F/G) — open is auto carry-forward
   {key:'upbitOpen',     label:'업비트시작',  fmt:'krw', autoFill:true,
@@ -1709,9 +1823,18 @@ function rateHeatBg(val){
 
 window.renderJournal=function(){
   _jnlDirty=false;
+  const isHk=getCurUid()==='hk';
+  const schema=isHk?null:getJnlSchema();
+  // Show/hide header buttons based on user
+  const cfgBtn=document.getElementById('jnl-cfg-btn');
+  const addColBtn=document.getElementById('jnl-addcol-btn');
+  if(cfgBtn)cfgBtn.style.display=isHk?'none':'';
+  if(addColBtn)addColBtn.style.display=isHk?'':'none';
+
   const customCols=getCustomCols();
+  const baseCols=isHk?JNL_COLS:buildDynamicCols(schema);
   const allCols=getOrderedCols([
-    ...JNL_COLS,
+    ...baseCols,
     ...customCols.map(c=>({
       key:'cd_'+c.id, label:c.label, fmt:c.fmt==='num'?'usd':'txt',
       isCustom:true, customId:c.id, customFmt:c.fmt,
@@ -1726,12 +1849,13 @@ window.renderJournal=function(){
     <th class="jnl-n">#</th>
     <th class="jnl-sort-th" onclick="jnlSortToggle()" title="클릭으로 정렬 전환">날짜 ${jnlSortAsc?'↑':'↓'}</th>
     ${allCols.map(c=>{
-      if(c.readonly)return`<th style="color:var(--tx2);font-style:italic" data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)" title="${c.autoFillDesc||'자동계산'}">${c.label}<span class="jnl-auto-badge" title="${c.autoFillDesc||'자동계산'}">∑</span></th>`;
-      if(c.isCustom)return`<th data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}<button class="jnl-col-del" onclick="delJnlCol('${c.customId}')" title="열 삭제">✕</button></th>`;
+      const dnd=`data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)"`;
+      const renameAttr=(!isHk&&!c.isCustom&&!c.readonly)?` ondblclick="jnlColRename('${c.key}',this,event)" title="더블클릭: 열 이름 변경 | 드래그: 순서 변경"`:` title="드래그: 순서 변경"`;
+      if(c.readonly)return`<th style="color:var(--tx2);font-style:italic" ${dnd}${renameAttr}>${c.label}<span class="jnl-auto-badge" title="${c.autoFillDesc||'자동계산'}">∑</span></th>`;
+      if(c.isCustom)return`<th ${dnd}>${c.label}<button class="jnl-col-del" onclick="delJnlCol('${c.customId}')" title="열 삭제">✕</button></th>`;
       const autoDesc=c.autoFillDesc||'자동입력';
       const autoBadge=c.autoFill?`<span class="jnl-auto-badge" title="${autoDesc}">⚡</span>`:'';
-      const thTitle=c.autoFill?` title="${autoDesc}"`:'' ;
-      return`<th${thTitle} data-col-key="${c.key}" draggable="true" ondragstart="jnlColDragStart(event)" ondragover="jnlColDragOver(event)" ondrop="jnlColDrop(event)" ondragend="jnlColDragEnd(event)">${c.label}${autoBadge}</th>`;
+      return`<th ${dnd}${renameAttr}>${c.label}${autoBadge}</th>`;
     }).join('')}
     <th></th>
   </tr>`;
@@ -1843,6 +1967,9 @@ window.jnlEdit=function(span){
   const isCustCol=key.startsWith('cd_');
 
   // Resolve column definition
+  const isHkJnl=getCurUid()==='hk';
+  const _dynSchema=isHkJnl?null:getJnlSchema();
+  const _dynCols=isHkJnl?null:buildDynamicCols(_dynSchema);
   let col=null;
   if(isCustCol){
     const custColId=key.slice(3);
@@ -1852,7 +1979,7 @@ window.jnlEdit=function(span){
       get:e=>e.customData?.[custColId],
       upd:v=>({[`customData.${custColId}`]:custDef.fmt==='num'?+v||0:v})};
   } else {
-    col=JNL_COLS.find(c=>c.key===key);
+    col=isHkJnl?JNL_COLS.find(c=>c.key===key):_dynCols.find(c=>c.key===key);
     if(col?.readonly)return; // skip readonly cols
   }
 
@@ -1905,20 +2032,41 @@ window.jnlEdit=function(span){
       // Pre-sort journal once for all auto-compute + carry-forward blocks
       const _jnlSorted=[...journal].sort((a,b)=>a.date>b.date?1:-1);
       const _idx=_jnlSorted.findIndex(e=>e.id===id);
-      // ── Auto-compute totalSeed = (upbit.close + bithumb.close) / tether + binance.close ──
-      const _tsDeps=['upbit','bithumb','binance','toss','tether'];
+      // ── Auto-compute totalSeed ──
       let _newTS=null;
-      if(_tsDeps.includes(key)&&!isDate){
-        const ub=+entry.exchanges?.upbit?.close||0,bh=+entry.exchanges?.bithumb?.close||0;
-        const bn=+entry.exchanges?.binance?.close||0,to=+entry.exchanges?.toss?.close||0;
-        const tt=+entry.tether||0;
-        if(tt>0&&(ub||bh||bn||to)){
-          _newTS=+((ub+bh+to)/tt+bn).toFixed(4);
-          if(Math.abs(_newTS-(+entry.totalSeed||0))>0.001){
-            entry.totalSeed=_newTS;
-            await db.collection('trading_journal').doc(id).update({totalSeed:_newTS});
-            const tsSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="totalSeed"]');
-            if(tsSpan){tsSpan.innerHTML=jnlFmt(_newTS,'usd');tsSpan.dataset.val=String(_newTS);}
+      if(isHkJnl){
+        const _tsDeps=['upbit','bithumb','binance','toss','tether'];
+        if(_tsDeps.includes(key)&&!isDate){
+          const ub=+entry.exchanges?.upbit?.close||0,bh=+entry.exchanges?.bithumb?.close||0;
+          const bn=+entry.exchanges?.binance?.close||0,to=+entry.exchanges?.toss?.close||0;
+          const tt=+entry.tether||0;
+          if(tt>0&&(ub||bh||bn||to)){
+            _newTS=+((ub+bh+to)/tt+bn).toFixed(4);
+            if(Math.abs(_newTS-(+entry.totalSeed||0))>0.001){
+              entry.totalSeed=_newTS;
+              await db.collection('trading_journal').doc(id).update({totalSeed:_newTS});
+              const tsSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="totalSeed"]');
+              if(tsSpan){tsSpan.innerHTML=jnlFmt(_newTS,'usd');tsSpan.dataset.val=String(_newTS);}
+            }
+          }
+        }
+      } else {
+        const _exchCloseDeps=_dynSchema.exchanges.map(e=>e.id);
+        if((_exchCloseDeps.includes(key)||key==='tether')&&!isDate){
+          const _krwEx=_dynSchema.exchanges.filter(e=>e.inSeed&&e.currency==='krw');
+          const _usdEx=_dynSchema.exchanges.filter(e=>e.inSeed&&e.currency==='usd');
+          const tt=+entry.tether||0;
+          const krwSum=_krwEx.reduce((s,e)=>s+(+entry.exchanges?.[e.id]?.close||0),0);
+          const usdSum=_usdEx.reduce((s,e)=>s+(+entry.exchanges?.[e.id]?.close||0),0);
+          const hasKrw=_krwEx.length>0;
+          if(!hasKrw||tt>0){
+            _newTS=+(hasKrw&&tt?krwSum/tt+usdSum:usdSum).toFixed(4);
+            if(Math.abs(_newTS-(+entry.totalSeed||0))>0.001){
+              entry.totalSeed=_newTS;
+              await db.collection('trading_journal').doc(id).update({totalSeed:_newTS});
+              const tsSpan=span.closest('tr').querySelector('.jnl-cell-view[data-key="totalSeed"]');
+              if(tsSpan){tsSpan.innerHTML=jnlFmt(_newTS,'usd');tsSpan.dataset.val=String(_newTS);}
+            }
           }
         }
       }
@@ -1926,7 +2074,7 @@ window.jnlEdit=function(span){
       if(key==='totalSeed'||key==='tether'||_newTS!==null){
         const row=span.closest('tr');
         if(row){const comp=row.querySelector('.jnl-computed');
-          if(comp){const krwCol=JNL_COLS.find(c=>c.key==='krwSeed');
+          if(comp){const krwCol=(isHkJnl?JNL_COLS:_dynCols).find(c=>c.key==='krwSeed');
             if(krwCol?.computed){const v=krwCol.computed(entry);comp.innerHTML=v!=null?jnlFmt(v,'krw'):'<span style="opacity:.35">—</span>';}}}
       }
       // ── Auto-compute profit = totalSeed + cashFlow - seedStart ──
@@ -1987,10 +2135,18 @@ window.jnlEdit=function(span){
       if(_nextE){
         const nextUpdate={};let nextDomUpdates=[];
         // exchange close→open
-        if(key==='upbit'){nextUpdate['exchanges.upbit.open']=+newRaw||0;nextDomUpdates.push({key:'upbitOpen',val:+newRaw||0});}
-        else if(key==='bithumb'){nextUpdate['exchanges.bithumb.open']=+newRaw||0;nextDomUpdates.push({key:'bithumbOpen',val:+newRaw||0});}
-        else if(key==='binance'){nextUpdate['exchanges.binance.open']=+newRaw||0;nextDomUpdates.push({key:'binanceOpen',val:+newRaw||0});}
-        else if(key==='toss'){nextUpdate['exchanges.toss.open']=+newRaw||0;nextDomUpdates.push({key:'tossOpen',val:+newRaw||0});}
+        if(isHkJnl){
+          if(key==='upbit'){nextUpdate['exchanges.upbit.open']=+newRaw||0;nextDomUpdates.push({key:'upbitOpen',val:+newRaw||0});}
+          else if(key==='bithumb'){nextUpdate['exchanges.bithumb.open']=+newRaw||0;nextDomUpdates.push({key:'bithumbOpen',val:+newRaw||0});}
+          else if(key==='binance'){nextUpdate['exchanges.binance.open']=+newRaw||0;nextDomUpdates.push({key:'binanceOpen',val:+newRaw||0});}
+          else if(key==='toss'){nextUpdate['exchanges.toss.open']=+newRaw||0;nextDomUpdates.push({key:'tossOpen',val:+newRaw||0});}
+        } else {
+          const _colDef=_dynCols.find(c=>c.key===key);
+          if(_colDef?._exchId){
+            nextUpdate[`exchanges.${_colDef._exchId}.open`]=+newRaw||0;
+            nextDomUpdates.push({key:_colDef._exchId+'Open',val:+newRaw||0});
+          }
+        }
         // personalCumPnl → next personalCumPnl
         const _pcToCarry=key==='personalCumPnl'?+newRaw||0:(['personalPnl','coinPnl','stockPnl'].includes(key)?+entry.personalCumPnl||0:null);
         if(_pcToCarry!==null){
@@ -2027,7 +2183,7 @@ window.jnlEdit=function(span){
             if(nextTr){
               nextDomUpdates.forEach(({key:nk,val:nv})=>{
                 const ns=nextTr.querySelector(`.jnl-cell-view[data-key="${nk}"]`);
-                if(ns){const nc=JNL_COLS.find(c=>c.key===nk);ns.innerHTML=jnlFmt(nv,nc?.fmt||'usd');ns.dataset.val=String(nv);}
+                if(ns){const nc=(isHkJnl?JNL_COLS:_dynCols).find(c=>c.key===nk);ns.innerHTML=jnlFmt(nv,nc?.fmt||'usd');ns.dataset.val=String(nv);}
               });
             }
           }catch(e){console.error('carry-forward 실패',e);}
@@ -2121,14 +2277,25 @@ window.addJnlRow=async function(){
   const tether=await fetchTetherRate(d)||0;
   // Carry-forward: prev row's close becomes today's open; prev totalSeed → seedStart
   const prev=journal.length?[...journal].sort((a,b)=>b.date>a.date?1:-1)[0]:null;
-  const data={
-    date:d,
-    exchanges:{
+  const isHkRow=getCurUid()==='hk';
+  let _rowExchanges;
+  if(isHkRow){
+    _rowExchanges={
       upbit:  {open:prev?.exchanges?.upbit?.close  ||0, close:0},
       bithumb:{open:prev?.exchanges?.bithumb?.close||0, close:0},
       binance:{open:prev?.exchanges?.binance?.close||0, close:0},
       toss:   {open:prev?.exchanges?.toss?.close   ||0, close:0},
-    },
+    };
+  } else {
+    const _rowSchema=getJnlSchema();
+    _rowExchanges={};
+    _rowSchema.exchanges.forEach(e=>{
+      _rowExchanges[e.id]={open:prev?.exchanges?.[e.id]?.close||0, close:0};
+    });
+  }
+  const data={
+    date:d,
+    exchanges:_rowExchanges,
     seedStart:prev?.totalSeed||0,
     totalSeed:0,profit:0,rate:0,tether,
     cashFlow:0,personalPnl:0,coinPnl:0,stockPnl:0,personalCumPnl:prev?.personalCumPnl||0,stopAlert:'',memo:'',
@@ -2269,9 +2436,11 @@ let _jnlLastSpan=null; // tracks last-clicked cell for global paste
 async function _doJnlPaste(rawText,startSpan){
   const rows=rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(r=>r!=='');
   if(!rows.length)return;
+  const isHkPaste=getCurUid()==='hk';
   const customCols=getCustomCols();
+  const basePasteCols=isHkPaste?JNL_COLS:buildDynamicCols(getJnlSchema());
   const allCols=getOrderedCols([
-    ...JNL_COLS,
+    ...basePasteCols,
     ...customCols.map(c=>({key:'cd_'+c.id,label:c.label,fmt:c.fmt==='num'?'usd':'txt',
       isCustom:true,customId:c.id,customFmt:c.fmt,
       get:e=>e.customData?.[c.id],
@@ -2334,20 +2503,6 @@ window.jnlColDragEnd=function(e){
   document.querySelectorAll('#jnl-sheet-head th').forEach(th=>{th.style.outline='';th.style.opacity='';});
   _jnlDragKey=null;
 };
-window.jnlColDrop=function(e){
-  e.preventDefault();
-  const toKey=e.currentTarget.dataset.colKey;
-  if(!_jnlDragKey||!toKey||_jnlDragKey===toKey)return;
-  const customCols=getCustomCols();
-  const all=[...JNL_COLS,...customCols.map(c=>({key:'cd_'+c.id}))];
-  const ordered=getOrderedCols(all);
-  const keys=ordered.map(c=>c.key);
-  const from=keys.indexOf(_jnlDragKey),to=keys.indexOf(toKey);
-  if(from===-1||to===-1)return;
-  keys.splice(to,0,keys.splice(from,1)[0]);
-  saveColOrder(keys);
-  renderJournal();
-};
 
 /* USD/KRW daily rate — primary: JSDelivr CDN, fallback: exchangerate.host */
 async function fetchTetherRate(date){
@@ -2387,36 +2542,224 @@ window.delJnlCol=function(id){
   renderJournal();
 };
 
+/* ── Journal Column Config Modal (non-hk) ── */
+let _cfgDraft=null; // working copy of schema while modal is open
+
+window.openJnlColCfg=function(){
+  _cfgDraft=JSON.parse(JSON.stringify(getJnlSchema()));
+  _renderJnlCfgBody();
+  document.getElementById('jnl-cfg-modal').style.display='flex';
+};
+window.closeJnlColCfg=function(){
+  document.getElementById('jnl-cfg-modal').style.display='none';
+  _cfgDraft=null;
+};
+
+function _renderJnlCfgBody(){
+  const body=document.getElementById('jnl-cfg-body');
+  if(!body)return;
+  const s=_cfgDraft;
+
+  // Exchange rows with drag-to-reorder
+  const exchRows=s.exchanges.map((ex,i)=>`
+    <div class="cfg-exch-row" data-exch-idx="${i}" draggable="true"
+      ondragstart="_cfgExchDragStart(event,${i})" ondragover="_cfgExchDragOver(event,${i})" ondrop="_cfgExchDrop(event,${i})" ondragend="_cfgExchDragEnd(event)">
+      <span class="drag-handle">⠿</span>
+      <input class="cfg-exch-name" id="cfg-ex-label-${i}" value="${ex.label}" placeholder="거래소 이름" oninput="_cfgExchLabel(${i},this.value)">
+      <div class="cfg-cur-toggle">
+        <button id="cfg-ex-krw-${i}" class="${ex.currency==='krw'?'active':''}" onclick="_cfgExchCur(${i},'krw')">KRW</button>
+        <button id="cfg-ex-usd-${i}" class="${ex.currency==='usd'?'active':''}" onclick="_cfgExchCur(${i},'usd')">USD</button>
+      </div>
+      <label class="cfg-seed-chk" title="총시드 자동계산에 포함">
+        <input type="checkbox" id="cfg-ex-seed-${i}" ${ex.inSeed?'checked':''} onchange="_cfgExchSeed(${i},this.checked)">시드
+      </label>
+      <button class="cfg-del-btn" onclick="_cfgExchDel(${i})" title="거래소 삭제">✕</button>
+    </div>`).join('');
+
+  // System column rows
+  const sysRows=_SYS_COL_DEFS.map(def=>{
+    const cfg=s.systemCols[def.id]||{show:false,label:def.label};
+    const autoMark=def.autoFill?'<span class="cfg-sys-badge">⚡자동</span>':def.readonly?'<span class="cfg-sys-badge">∑계산</span>':'';
+    return`<div class="cfg-sys-row">
+      <input type="checkbox" id="cfg-sys-${def.id}" ${cfg.show?'checked':''} onchange="_cfgSysShow('${def.id}',this.checked)">
+      <input class="cfg-sys-label" id="cfg-sys-label-${def.id}" value="${cfg.label||def.label}" placeholder="${def.label}" oninput="_cfgSysLabel('${def.id}',this.value)" title="클릭 후 편집: 열 이름 변경">
+      ${autoMark}
+    </div>`;
+  }).join('');
+
+  body.innerHTML=`
+    <div style="margin-bottom:18px">
+      <div class="cfg-sec-title">거래소 <span style="font-size:.68rem;font-weight:400;color:var(--tx2)">(드래그로 순서 변경)</span></div>
+      <div id="cfg-exchs-wrap">${exchRows}</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="_cfgAddExch()">+ 거래소 추가</button>
+    </div>
+    <div style="border-top:1px solid var(--bd);padding-top:14px">
+      <div class="cfg-sec-title">시스템 컬럼 <span style="font-size:.68rem;font-weight:400;color:var(--tx2)">(☑ 표시 / 이름 클릭 편집)</span></div>
+      ${sysRows}
+    </div>
+    <div style="margin-top:14px;border-top:1px solid var(--bd);padding-top:12px">
+      <div class="cfg-sec-title">사용자 정의 열</div>
+      <button class="btn btn-secondary btn-sm" onclick="addJnlCol()">＋ 텍스트/숫자 열 추가</button>
+    </div>`;
+}
+
+// Draft mutators — called by inline event handlers
+window._cfgExchLabel=function(i,v){if(_cfgDraft)_cfgDraft.exchanges[i].label=v;};
+window._cfgExchCur=function(i,cur){
+  if(!_cfgDraft)return;
+  _cfgDraft.exchanges[i].currency=cur;
+  document.getElementById('cfg-ex-krw-'+i)?.classList.toggle('active',cur==='krw');
+  document.getElementById('cfg-ex-usd-'+i)?.classList.toggle('active',cur==='usd');
+};
+window._cfgExchSeed=function(i,v){if(_cfgDraft)_cfgDraft.exchanges[i].inSeed=v;};
+window._cfgExchDel=function(i){
+  if(!_cfgDraft)return;
+  if(!confirm(`"${_cfgDraft.exchanges[i].label}" 거래소를 삭제하시겠습니까?\n(저장된 데이터는 유지됩니다)`))return;
+  _cfgDraft.exchanges.splice(i,1);
+  _renderJnlCfgBody();
+};
+window._cfgAddExch=function(){
+  if(!_cfgDraft)return;
+  const label=prompt('새 거래소 이름:');
+  if(!label?.trim())return;
+  const id='exch_'+Date.now();
+  _cfgDraft.exchanges.push({id,label:label.trim(),currency:'krw',inSeed:true});
+  _renderJnlCfgBody();
+};
+window._cfgSysShow=function(id,v){if(_cfgDraft)_cfgDraft.systemCols[id]={...(_cfgDraft.systemCols[id]||{}),show:v};};
+window._cfgSysLabel=function(id,v){if(_cfgDraft)_cfgDraft.systemCols[id]={...(_cfgDraft.systemCols[id]||{}),label:v};};
+
+// Exchange drag-to-reorder within modal
+let _cfgDragIdx=null;
+window._cfgExchDragStart=function(e,i){_cfgDragIdx=i;e.currentTarget.style.opacity='.45';e.dataTransfer.effectAllowed='move';};
+window._cfgExchDragOver=function(e,i){e.preventDefault();e.dataTransfer.dropEffect='move';document.querySelectorAll('#cfg-exchs-wrap .cfg-exch-row').forEach((r,j)=>r.style.outline=j===i?'2px solid var(--ac)':'');};
+window._cfgExchDrop=function(e,i){
+  e.preventDefault();
+  if(_cfgDragIdx===null||_cfgDragIdx===i||!_cfgDraft)return;
+  const arr=_cfgDraft.exchanges;
+  arr.splice(i,0,arr.splice(_cfgDragIdx,1)[0]);
+  _cfgDragIdx=null;
+  _renderJnlCfgBody();
+};
+window._cfgExchDragEnd=function(e){
+  e.currentTarget.style.opacity='';
+  document.querySelectorAll('#cfg-exchs-wrap .cfg-exch-row').forEach(r=>r.style.outline='');
+  _cfgDragIdx=null;
+};
+
+window.applyJnlColCfg=function(){
+  if(!_cfgDraft)return;
+  // Ensure each systemCol has a label
+  _SYS_COL_DEFS.forEach(def=>{
+    if(!_cfgDraft.systemCols[def.id])_cfgDraft.systemCols[def.id]={show:false,label:def.label};
+    if(!_cfgDraft.systemCols[def.id].label)_cfgDraft.systemCols[def.id].label=def.label;
+  });
+  saveJnlSchema(_cfgDraft);
+  closeJnlColCfg();
+  renderJournal();
+  toast('열 구성 저장됨','ok');
+};
+
+/* ── Inline column header rename (double-click, non-hk) ── */
+window.jnlColRename=function(colKey,th,event){
+  event.stopPropagation();
+  if(th.querySelector('.jnl-col-rename-inp'))return;
+  const schema=getJnlSchema();
+  if(!schema)return;
+  // Find current label
+  let curLabel='';
+  const exchClose=schema.exchanges.find(e=>e.id===colKey);
+  const exchOpen=schema.exchanges.find(e=>colKey===e.id+'Open');
+  const sysDef=_SYS_COL_DEFS.find(d=>d.id===colKey);
+  if(exchClose)curLabel=schema.systemCols[colKey]?.label||(exchClose.label+'마감');
+  else if(exchOpen)curLabel=schema.systemCols[colKey]?.label||(exchOpen.label+'시작');
+  else if(sysDef)curLabel=schema.systemCols[colKey]?.label||sysDef.label;
+  else return;
+
+  const inp=document.createElement('input');
+  inp.className='jnl-col-rename-inp';
+  inp.style.cssText='position:absolute;top:2px;left:2px;right:2px;background:var(--bg);border:1.5px solid var(--ac);border-radius:3px;color:var(--tx);padding:2px 5px;font-size:.76rem;font-family:inherit;z-index:20;width:calc(100% - 8px);box-sizing:border-box';
+  inp.value=curLabel;
+  th.style.position='relative';
+  th.appendChild(inp);
+  inp.focus();inp.select();
+
+  function commit(){
+    const newLabel=inp.value.trim();
+    inp.remove();
+    if(!newLabel||newLabel===curLabel)return;
+    const s=getJnlSchema();
+    // Update exchange label (affects both open+close display name)
+    if(exchClose){s.exchanges.find(e=>e.id===colKey).label=newLabel.replace(/마감$/,'').replace(/시작$/,'').trim()||newLabel;}
+    else if(exchOpen){const ex=s.exchanges.find(e=>e.id===exchOpen.id);if(ex)ex.label=newLabel.replace(/시작$/,'').replace(/마감$/,'').trim()||newLabel;}
+    else if(sysDef){if(!s.systemCols[colKey])s.systemCols[colKey]={show:true};s.systemCols[colKey].label=newLabel;}
+    saveJnlSchema(s);
+    renderJournal();
+    toast(`열 이름 변경: ${newLabel}`,'ok');
+  }
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();inp.blur();}
+    if(ev.key==='Escape'){inp.removeEventListener('blur',commit);inp.remove();}
+  });
+};
+
+/* ── jnlColDrop: use dynamic cols for non-hk ── */
+window.jnlColDrop=function(e){
+  e.preventDefault();
+  const toKey=e.currentTarget.dataset.colKey;
+  if(!_jnlDragKey||!toKey||_jnlDragKey===toKey)return;
+  const isHkDrop=getCurUid()==='hk';
+  const customCols=getCustomCols();
+  const baseCols=isHkDrop?JNL_COLS:buildDynamicCols(getJnlSchema());
+  const all=[...baseCols,...customCols.map(c=>({key:'cd_'+c.id}))];
+  const ordered=getOrderedCols(all);
+  const keys=ordered.map(c=>c.key);
+  const from=keys.indexOf(_jnlDragKey),to=keys.indexOf(toKey);
+  if(from===-1||to===-1)return;
+  keys.splice(to,0,keys.splice(from,1)[0]);
+  saveColOrder(keys);
+  renderJournal();
+};
+
 window.exportJournalXLSX=function(){
   if(!journal.length){toast('내보낼 데이터 없음','err');return;}
+  const isHkXls=getCurUid()==='hk';
   const customCols=getCustomCols();
   const data=[...journal].sort((a,b)=>a.date>b.date?1:-1);
   const rows=data.map(e=>{
     const s=+e.totalSeed||0,t=+e.tether||0;
-    const row={
-      '날짜':e.date,
-      '업비트시작':+e.exchanges?.upbit?.open||'',
-      '업비트마감':+e.exchanges?.upbit?.close||'',
-      '빗썸시작':+e.exchanges?.bithumb?.open||'',
-      '빗썸마감':+e.exchanges?.bithumb?.close||'',
-      '퓨쳐스시작':+e.exchanges?.binance?.open||'',
-      '퓨쳐스마감':+e.exchanges?.binance?.close||'',
-      '토스시작':+e.exchanges?.toss?.open||'',
-      '토스마감':+e.exchanges?.toss?.close||'',
-      '시드시작($)':+e.seedStart||'',
-      '테더(₩/$)':t||'',
-      '총시드($)':s||'',
-      '원화시드(₩)':s&&t?Math.round(s*t):'',
-      '출입금($)':+e.cashFlow||'',
-      '수익금($)':+e.profit||'',
-      '수익률(%)':+e.rate||'',
-      '개인손익':+e.personalPnl||'',
-      '코인':+e.coinPnl||'',
-      '주식':+e.stockPnl||'',
-      '개인누적':+e.personalCumPnl||'',
-      '강제종료':e.stopAlert||'',
-      '비고/사유':e.memo||'',
-    };
+    let row={'날짜':e.date};
+    if(isHkXls){
+      Object.assign(row,{
+        '업비트시작':+e.exchanges?.upbit?.open||'','업비트마감':+e.exchanges?.upbit?.close||'',
+        '빗썸시작':+e.exchanges?.bithumb?.open||'','빗썸마감':+e.exchanges?.bithumb?.close||'',
+        '퓨쳐스시작':+e.exchanges?.binance?.open||'','퓨쳐스마감':+e.exchanges?.binance?.close||'',
+        '토스시작':+e.exchanges?.toss?.open||'','토스마감':+e.exchanges?.toss?.close||'',
+      });
+    } else {
+      const xlsSchema=getJnlSchema();
+      xlsSchema.exchanges.forEach(ex=>{
+        row[ex.label+'시작']=+e.exchanges?.[ex.id]?.open||'';
+        row[ex.label+'마감']=+e.exchanges?.[ex.id]?.close||'';
+      });
+    }
+    const sys=isHkXls?null:getJnlSchema()?.systemCols;
+    const _sysLbl=(id,def)=>isHkXls?def:(sys?.[id]?.label||def);
+    const _sysShow=(id)=>isHkXls?true:!!(sys?.[id]?.show);
+    if(isHkXls||_sysShow('seedStart'))row[_sysLbl('seedStart','시드시작($)')]=+e.seedStart||'';
+    if(isHkXls||_sysShow('tether'))row[_sysLbl('tether','테더(₩/$)')]=t||'';
+    if(isHkXls||_sysShow('totalSeed'))row[_sysLbl('totalSeed','총시드($)')]=s||'';
+    if(isHkXls||_sysShow('krwSeed'))row[_sysLbl('krwSeed','원화시드(₩)')]=s&&t?Math.round(s*t):'';
+    if(isHkXls||_sysShow('cashFlow'))row[_sysLbl('cashFlow','출입금($)')]=+e.cashFlow||'';
+    if(isHkXls||_sysShow('profit'))row[_sysLbl('profit','수익금($)')]=+e.profit||'';
+    if(isHkXls||_sysShow('rate'))row[_sysLbl('rate','수익률(%)')]=+e.rate||'';
+    if(isHkXls||_sysShow('personalPnl'))row[_sysLbl('personalPnl','개인손익')]=+e.personalPnl||'';
+    if(isHkXls||_sysShow('coinPnl'))row[_sysLbl('coinPnl','코인')]=+e.coinPnl||'';
+    if(isHkXls||_sysShow('stockPnl'))row[_sysLbl('stockPnl','주식')]=+e.stockPnl||'';
+    if(isHkXls||_sysShow('personalCumPnl'))row[_sysLbl('personalCumPnl','개인누적')]=+e.personalCumPnl||'';
+    if(isHkXls||_sysShow('stopAlert'))row[_sysLbl('stopAlert','강제종료')]=e.stopAlert||'';
+    if(isHkXls||_sysShow('memo'))row[_sysLbl('memo','비고/사유')]=e.memo||'';
     customCols.forEach(c=>{row[c.label]=e.customData?.[c.id]??'';});
     return row;
   });
