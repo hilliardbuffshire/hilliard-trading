@@ -286,7 +286,7 @@
     /* expand 미디어 (전폭) */
     .tr-expand-media{background:var(--bg3);border-top:1px solid var(--bd);padding:10px 18px 14px}
     .tr-expand-media-img img{width:100%;max-width:100%;height:auto;max-height:640px;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);display:block;background:var(--bg2)}
-    .tr-expand-imgs-lg{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:14px;margin-top:6px}
+    .tr-expand-imgs-lg{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:6px}
     .tr-expand-imgs-lg img{width:100%;height:auto;max-height:720px;object-fit:contain;border-radius:6px;cursor:zoom-in;border:1px solid var(--bd);transition:opacity .15s;background:var(--bg)}
     .tr-expand-imgs-lg img:hover{opacity:.82}
     /* Direction toggle */
@@ -329,11 +329,21 @@
     .lc-tool-sep{width:1px;height:16px;background:var(--bd);margin:0 4px;align-self:center;flex-shrink:0}
     .lc-pct-tip{position:absolute;background:rgba(8,8,16,.92);border:1px solid rgba(255,255,255,.16);border-radius:5px;padding:5px 12px;font-size:.76rem;color:#fff;pointer-events:none;white-space:nowrap;z-index:20;display:none;box-shadow:0 2px 12px rgba(0,0,0,.5)}
 
+    .mob-hbg{display:none;position:fixed;top:12px;left:12px;z-index:301;width:38px;height:38px;background:var(--bg2);border:1px solid var(--bd);border-radius:9px;color:var(--tx);cursor:pointer;align-items:center;justify-content:center;font-size:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.3);padding:0;font-family:inherit;transition:background .15s;line-height:1}
+    .mob-hbg:hover{background:var(--bg3)}
+    #sb-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:299}
+    .resp-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     @media(max-width:900px){
       :root{--sidebar-w:0px}
-      .sidebar{display:none}.content{margin-left:0;padding:16px}
+      .sidebar{left:-240px;width:240px;transition:left .25s cubic-bezier(.4,0,.2,1),background .3s,border-color .3s}
+      .content{margin-left:0;padding:60px 16px 16px}
       .chart-row{grid-template-columns:1fr}
+      .mob-hbg{display:flex}
+      .resp-grid-2{grid-template-columns:1fr}
+      #ai-panel{width:calc(100vw - 44px);right:22px}
     }
+    .sidebar.sb-open{left:0!important}
+    #sb-ov.on{display:block}
     .login-cross-svg{filter:drop-shadow(0 0 16px rgba(212,170,80,.6));animation:lc-glow 3s ease-in-out infinite alternate;display:block;margin:0 auto 26px}
     @keyframes lc-glow{from{filter:drop-shadow(0 0 10px rgba(212,170,80,.4))}to{filter:drop-shadow(0 0 28px rgba(212,170,80,.9))}}
     .sb-cross-svg{filter:drop-shadow(0 0 8px rgba(212,170,80,.45));display:block;margin:0 auto 10px}
@@ -408,6 +418,8 @@
 </div>
 
 <div id="app" style="display:none">
+  <button class="mob-hbg" onclick="toggleSidebar()" aria-label="메뉴">☰</button>
+  <div id="sb-ov" onclick="toggleSidebar(false)"></div>
   <aside class="sidebar">
     <div class="sb-brand" style="text-align:center;padding:22px 20px 18px">
       <svg class="sb-cross-svg" width="40" height="49" viewBox="0 0 72 88" fill="none">
@@ -978,10 +990,19 @@ async function boot(){
   updatePersonalTab();
   renderDashboard();
 }
+window.toggleSidebar=function(open){
+  var sb=document.querySelector('.sidebar');
+  var ov=document.getElementById('sb-ov');
+  if(!sb||!ov)return;
+  if(open===undefined)open=!sb.classList.contains('sb-open');
+  sb.classList.toggle('sb-open',open);
+  ov.classList.toggle('on',open);
+};
 document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>goTo(el.dataset.view)));
 window.goTo=function(v){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.id==='view-'+v));
+  if(window.innerWidth<=900)toggleSidebar(false);
   if(v==='dashboard')   renderDashboard();
   if(v==='journal')     {if(_jnlDirty)renderJournal();}
   if(v==='trades')      {renderTrades();renderTradesCurve();renderJnlBalancePanel();}
@@ -3136,7 +3157,7 @@ function renderSeasonality(){
 
   bodyEl.innerHTML=`
     <div class="section-label">📅 요일별 종합 분석<span style="font-size:.73rem;color:var(--tx2);font-weight:400;margin-left:8px">초록=수익 우세 / 빨강=손실 우세 &nbsp;·&nbsp; ⚠️ 샘플 5건 미만</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px">
+    <div class="resp-grid-2" style="margin-top:10px">
       <div class="chart-card">
         <h3>요일별 승률 (%)</h3>
         <div style="font-size:.71rem;color:var(--tx2);margin-bottom:6px">초록 바 = 50% 이상 (수익 우세) · 빨간 바 = 50% 미만 (손실 우세)</div>
@@ -3157,7 +3178,7 @@ function renderSeasonality(){
     </div>
 
     <div class="section-label" style="margin-top:28px">📆 월별 성과 분석 (1~12월)<span style="font-size:.73rem;color:var(--tx2);font-weight:400;margin-left:8px">연간 반복 패턴 — 같은 월 전체 데이터 집계</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px">
+    <div class="resp-grid-2" style="margin-top:10px">
       <div class="chart-card">
         <h3>월별 평균 일손익 (%)</h3>
         <div style="font-size:.71rem;color:var(--tx2);margin-bottom:6px">초록 바 = 해당 월 평균 수익 · 빨간 바 = 평균 손실</div>
@@ -3649,7 +3670,7 @@ function renderPersonalView(){
     <!-- 요일별 분석 -->
     <div class="section-label" style="margin-top:28px;margin-bottom:10px">📅 요일별 개인손익 분석 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· personalCumPnl delta 기반 · ${active.length}거래일</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${dayBars}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+    <div class="resp-grid-2" style="margin-bottom:14px">
       <div class="chart-card"><h3>요일별 개인 승률 (%)</h3><canvas id="chart-hk-dwr"></canvas></div>
       <div class="chart-card"><h3>요일별 개인 평균손익 ($)</h3><canvas id="chart-hk-dpnl"></canvas></div>
     </div>
@@ -3663,7 +3684,7 @@ function renderPersonalView(){
 
     <!-- 월별 분석 -->
     <div class="section-label" style="margin-bottom:10px">📆 월별 개인손익 분석 <span style="font-size:.73rem;color:var(--tx2);font-weight:400">· 캘린더 월 집계</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+    <div class="resp-grid-2" style="margin-bottom:14px">
       <div class="chart-card"><h3>월별 개인 평균일손익 ($)</h3><canvas id="chart-hk-mpnl"></canvas></div>
       <div class="chart-card"><h3>월별 개인 거래 횟수</h3><canvas id="chart-hk-mfreq"></canvas></div>
     </div>
