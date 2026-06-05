@@ -1691,11 +1691,11 @@ function buildDynamicCols(schema){
   const cols=[];
   schema.exchanges.forEach(exch=>{
     const fmt=exch.currency==='krw'?'krw':'usd';
-    cols.push({key:exch.id+'Open', label:exch.label+'시작', fmt, autoFill:true,
+    cols.push({key:exch.id+'Open', label:exch.label+' 시작', fmt, autoFill:true,
       autoFillDesc:`전일 ${exch.label} 마감값 자동이월`,
       get:e=>e.exchanges?.[exch.id]?.open,
       upd:v=>({[`exchanges.${exch.id}.open`]:+v||0})});
-    cols.push({key:exch.id, label:exch.label+'마감', fmt,
+    cols.push({key:exch.id, label:exch.label+' 마감', fmt,
       get:e=>e.exchanges?.[exch.id]?.close,
       upd:v=>({[`exchanges.${exch.id}.close`]:+v||0}),
       _exchId:exch.id, _exchCurrency:exch.currency, _inSeed:exch.inSeed});
@@ -2713,8 +2713,8 @@ window.jnlColRename=function(colKey,th,event){
   const exchClose=schema.exchanges.find(e=>e.id===colKey);
   const exchOpen=schema.exchanges.find(e=>colKey===e.id+'Open');
   const sysDef=_SYS_COL_DEFS.find(d=>d.id===colKey);
-  if(exchClose)curLabel=schema.systemCols[colKey]?.label||(exchClose.label+'마감');
-  else if(exchOpen)curLabel=schema.systemCols[colKey]?.label||(exchOpen.label+'시작');
+  if(exchClose)curLabel=schema.systemCols[colKey]?.label||(exchClose.label+' 마감');
+  else if(exchOpen)curLabel=schema.systemCols[colKey]?.label||(exchOpen.label+' 시작');
   else if(sysDef)curLabel=schema.systemCols[colKey]?.label||sysDef.label;
   else return;
 
@@ -2782,8 +2782,8 @@ window.exportJournalXLSX=function(){
     } else {
       const xlsSchema=getJnlSchema();
       xlsSchema.exchanges.forEach(ex=>{
-        row[ex.label+'시작']=+e.exchanges?.[ex.id]?.open||'';
-        row[ex.label+'마감']=+e.exchanges?.[ex.id]?.close||'';
+        row[ex.label+' 시작']=+e.exchanges?.[ex.id]?.open||'';
+        row[ex.label+' 마감']=+e.exchanges?.[ex.id]?.close||'';
       });
     }
     const sys=isHkXls?null:getJnlSchema()?.systemCols;
