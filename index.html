@@ -1016,11 +1016,19 @@ window.goTo=function(v){
 
 
 /* ── Firestore ── */
+/* 누적(cumulative) 인메모리 재계산 — 외부(Apps Script)가 직접 추가한 트레이드도 항상 정확하게 반영.
+   날짜 → createdAt(같은 날 내 기록순) 순으로 정렬 후 손익% 누적합. */
+function _recalcCumLocal(){
+  trades.sort((a,b)=> a.date>b.date?1 : a.date<b.date?-1
+    : ((a.createdAt&&a.createdAt.seconds||0)-(b.createdAt&&b.createdAt.seconds||0)) );
+  let c=0; trades.forEach(t=>{ c=+(c+(+t.pnl||0)).toFixed(2); t.cumulative=c; });
+}
 async function fetchTrades(){
   const uid=getCurUid(),isDefault=uid===getUsers()[0]?.id;
   const s=await db.collection('trading_trades').orderBy('date','asc').get();
   const all=s.docs.map(d=>({id:d.id,...d.data()}));
   trades=all.filter(t=>isDefault?(!t.userId||t.userId===uid):t.userId===uid);
+  _recalcCumLocal(); // 로드 시 항상 누적 재계산 → 스크립트 추가분도 정확
 }
 async function fetchJournal(){
   const uid=getCurUid(),isDefault=uid===getUsers()[0]?.id;
@@ -1030,9 +1038,9 @@ async function fetchJournal(){
   _jnlDirty=true;
 }
 async function recalcCumulatives(){
-  trades.sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:0);
-  let cum=0;const batch=db.batch();
-  trades.forEach(t=>{cum=+(cum+(+t.pnl||0)).toFixed(2);batch.update(db.collection('trading_trades').doc(t.id),{cumulative:cum});t.cumulative=cum;});
+  _recalcCumLocal(); // 날짜+createdAt 순 인메모리 누적 계산
+  const batch=db.batch();
+  trades.forEach(t=>batch.update(db.collection('trading_trades').doc(t.id),{cumulative:t.cumulative}));
   await batch.commit();
 }
 
