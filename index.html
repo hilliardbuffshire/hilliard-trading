@@ -927,6 +927,7 @@ window.switchUser=async function(id){
   if(id===getCurUid())return;
   setCurUid(id);
   renderUserSwitcher();updateBrandName();
+  await loadJnlSchemaFromCloud();
   await Promise.all([fetchTrades(),fetchJournal()]);
   updatePersonalTab();
   const v=document.querySelector('.view.active')?.id?.replace('view-','');
@@ -986,6 +987,7 @@ async function boot(){
   if(!localStorage.getItem('hb_users')||!JSON.parse(localStorage.getItem('hb_users'))[0]?.id)saveUsers(DEF_USERS);
   renderUserSwitcher();updateBrandName();
   document.getElementById('tr-date').value=today();
+  await loadJnlSchemaFromCloud();
   await Promise.all([fetchTrades(),fetchJournal()]);
   updatePersonalTab();
   renderDashboard();
@@ -1024,7 +1026,7 @@ async function fetchJournal(){
   const uid=getCurUid(),isDefault=uid===getUsers()[0]?.id;
   const s=await db.collection('trading_journal').orderBy('date','desc').get();
   const all=s.docs.map(d=>({id:d.id,...d.data()}));
-  journal=all.filter(e=>isDefault?(!e.userId||e.userId===uid):e.userId===uid);
+  journal=all.filter(e=>!e._jnlSchema&&(isDefault?(!e.userId||e.userId===uid):e.userId===uid));
   _jnlDirty=true;
 }
 async function recalcCumulatives(){
@@ -1664,7 +1666,26 @@ function getJnlSchema(){
   _SYS_COL_DEFS.forEach(d=>{schema.systemCols[d.id].label=schema.systemCols[d.id].label||d.label;});
   return schema;
 }
-function saveJnlSchema(s){localStorage.setItem('hb_jnl_schema_'+getCurUid(),JSON.stringify(s));}
+function saveJnlSchema(s){
+  const uid=getCurUid();
+  localStorage.setItem('hb_jnl_schema_'+uid,JSON.stringify(s));
+  // hk는 하드코딩 컬럼 유지(클라우드 미저장). 그 외 유저는 Firestore에 저장 → 모든 기기 공유
+  if(uid!=='hk'){
+    db.collection('trading_journal').doc('cfg_jnlschema_'+uid)
+      .set({userId:uid,_jnlSchema:true,date:'0000-00-00',jnlSchema:s},{merge:true})
+      .catch(e=>console.warn('schema cloud save fail',e));
+  }
+}
+/* 클라우드(Firestore)에서 유저 컬럼 스키마 로드 → localStorage 캐시 동기화 (hk 제외) */
+async function loadJnlSchemaFromCloud(){
+  const uid=getCurUid();
+  if(uid==='hk')return;
+  try{
+    const doc=await db.collection('trading_journal').doc('cfg_jnlschema_'+uid).get();
+    const s=doc.exists?(doc.data()||{}).jnlSchema:null;
+    if(s)localStorage.setItem('hb_jnl_schema_'+uid,JSON.stringify(s));
+  }catch(e){console.warn('schema cloud load fail',e);}
+}
 
 function buildDynamicCols(schema){
   const cols=[];
